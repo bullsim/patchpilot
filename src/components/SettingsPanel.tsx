@@ -45,6 +45,16 @@ export function SettingsPanel({ config, onSave, onClose }: Props) {
           />
         </label>
 
+        <label className="field">
+          <span>Fleet dashboard URL (blank = off)</span>
+          <input
+            type="text"
+            value={draft.reportUrl}
+            placeholder="https://patchpilot.bullers.com/api/report"
+            onChange={(e) => setDraft((d) => ({ ...d, reportUrl: e.target.value }))}
+          />
+        </label>
+
         <div className="field-label">Components</div>
         <div className="toggles">
           {Object.keys(draft.components)

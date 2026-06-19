@@ -11,8 +11,11 @@ app with a live UI and a path to macOS and Linux.
 > upgrades apps/firmware tools that are already present on the machine. Components that
 > aren't installed (e.g. Crucial Storage Executive, Intel DSA, Dell Command Update) are
 > skipped, not installed. `winget upgrade --all` likewise only updates existing packages.
-- **macOS (planned):** `softwareupdate`, `brew`, `mas`.
-- **Linux/Zorin (planned):** `apt`, `flatpak`, `snap`, `fwupdmgr`.
+- **macOS:** `softwareupdate`, `brew`, `mas`.
+- **Linux / Zorin / Raspberry Pi:** `apt`, `flatpak`, `snap`, `fwupdmgr`.
+
+Builds for Windows x64, macOS (universal), Linux x64, and Linux ARM64 (Raspberry Pi 64-bit).
+Each machine auto-detects its own hardware and only shows components relevant to it.
 
 ## Stack
 
@@ -76,13 +79,27 @@ The app can run with no window for Task Scheduler:
 patchpilot.exe --silent --mode All        # or Software / Firmware
 ```
 
-Register a daily task with the helper (run from an elevated PowerShell):
+Register a daily task per OS:
 
 ```powershell
+# Windows (elevated PowerShell)
 .\install-scheduled-task.ps1 -Time 03:00 -Mode All
 ```
+```bash
+# macOS (launchd, runs in your session)
+./install-schedule-macos.sh 3 0 All
+# Linux / Raspberry Pi (systemd timer, root)
+sudo ./install-schedule-linux.sh 03:00 All
+```
 
-Updates require administrator rights; run the app (or the scheduled task) elevated.
+All three invoke the same `--silent --mode` headless path. Updates require admin/root;
+on Windows the GUI app auto-elevates, mac/Linux prompt via the OS when needed.
+
+## Fleet dashboard
+
+Each run POSTs a small status report to the dashboard URL in Settings (default
+`patchpilot.bullers.com/api/report`; blank to disable). See [`server/`](server/) for the
+self-hosted dashboard + update host (Caddy + systemd, e.g. on Hetzner).
 
 ## Auto-update (the app updates itself)
 

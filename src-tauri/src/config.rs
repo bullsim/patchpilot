@@ -3,7 +3,8 @@ use crate::paths::config_path;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-/// The 11 components, in run order, matching v5.3.
+/// Component display names for the current OS (must match registry.rs).
+#[cfg(windows)]
 pub const COMPONENT_NAMES: &[&str] = &[
     "Windows Update",
     "Microsoft Store",
@@ -18,6 +19,12 @@ pub const COMPONENT_NAMES: &[&str] = &[
     "Crucial Stack",
 ];
 
+#[cfg(target_os = "macos")]
+pub const COMPONENT_NAMES: &[&str] = &["macOS Software Update", "Homebrew", "Mac App Store"];
+
+#[cfg(target_os = "linux")]
+pub const COMPONENT_NAMES: &[&str] = &["APT Packages", "Flatpak", "Snap", "Firmware (fwupd)"];
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppConfig {
@@ -25,12 +32,19 @@ pub struct AppConfig {
     pub scheduled_run_mode: RunMode,
     #[serde(default)]
     pub teams_webhook: String,
+    /// Fleet dashboard endpoint; empty disables reporting.
+    #[serde(default = "default_report_url")]
+    pub report_url: String,
     #[serde(default)]
     pub components: BTreeMap<String, bool>,
 }
 
 fn default_mode() -> RunMode {
     RunMode::All
+}
+
+fn default_report_url() -> String {
+    "https://patchpilot.bullers.com/api/report".to_string()
 }
 
 impl Default for AppConfig {
@@ -42,6 +56,7 @@ impl Default for AppConfig {
         AppConfig {
             scheduled_run_mode: RunMode::All,
             teams_webhook: String::new(),
+            report_url: default_report_url(),
             components,
         }
     }

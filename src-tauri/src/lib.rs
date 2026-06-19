@@ -129,13 +129,15 @@ async fn start_run(mode: RunMode, app: AppHandle, state: State<'_, AppState>) ->
     let cfg = config::load();
     let cancel = state.cancel.clone();
     let running = state.running.clone();
+    let report_url = cfg.report_url.clone();
     let reporter: Arc<dyn Reporter> = Arc::new(EventReporter {
         app: app.clone(),
         log: FileLog::new(),
     });
 
     tauri::async_runtime::spawn(async move {
-        orchestrator::run_all(mode, sys, cfg, reporter, cancel).await;
+        let summary = orchestrator::run_all(mode, sys.clone(), cfg, reporter, cancel).await;
+        report_status(&report_url, &sys, &summary).await;
         running.store(false, Ordering::SeqCst);
     });
     Ok(())
@@ -192,6 +194,52 @@ async fn get_pending_reboot() -> Result<Option<String>, String> {
     Ok(reboot::pending().await)
 }
 
+// ---------------- fleet reporting ----------------
+
+fn hostname() -> String {
+    std::env::var("COMPUTERNAME")
+        .or_else(|_| std::env::var("HOSTNAME"))
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "unknown".into())
+}
+
+/// POST a small status report to the fleet dashboard (best effort, via curl).
+async fn report_status(report_url: &str, sys: &SystemInfo, summary: &model::RunSummary) {
+    if report_url.trim().is_empty() {
+        return;
+    }
+    let payload = serde_json::json!({
+        "hostname": hostname(),
+        "os": sys.os,
+        "manufacturer": sys.manufacturer,
+        "model": sys.model,
+        "version": env!("CARGO_PKG_VERSION"),
+        "mode": summary.mode,
+        "ok": summary.ok,
+        "warn": summary.warn,
+        "fail": summary.fail,
+        "skip": summary.skip,
+        "rebootRequired": summary.reboot_required,
+        "durationSecs": summary.duration_secs,
+        "timestamp": chrono::Local::now().to_rfc3339(),
+    });
+    let tmp = paths::app_dir().join("last_report.json");
+    if std::fs::write(&tmp, payload.to_string()).is_err() {
+        return;
+    }
+    let data = format!("@{}", tmp.display());
+    let _ = util::run_cmd(
+        "curl",
+        &[
+            "-s", "-m", "15", "-X", "POST", "-H", "Content-Type: application/json",
+            "--data-binary", &data, report_url,
+        ],
+        std::time::Duration::from_secs(20),
+    )
+    .await;
+}
+
 // ---------------- entry points ----------------
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -232,8 +280,10 @@ pub fn run_silent(args: &[String]) {
     rt.block_on(async {
         let sys = Arc::new(system_info::detect().await);
         let cfg = config::load();
+        let report_url = cfg.report_url.clone();
         let reporter: Arc<dyn Reporter> = Arc::new(CliReporter { log: FileLog::new() });
         let cancel = Arc::new(AtomicBool::new(false));
-        orchestrator::run_all(mode, sys, cfg, reporter, cancel).await;
+        let summary = orchestrator::run_all(mode, sys.clone(), cfg, reporter, cancel).await;
+        report_status(&report_url, &sys, &summary).await;
     });
 }

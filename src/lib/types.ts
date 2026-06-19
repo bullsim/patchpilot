@@ -48,5 +48,6 @@ export interface RunSummary {
 export interface AppConfig {
   scheduledRunMode: RunMode;
   teamsWebhook: string;
+  reportUrl: string;
   components: Record<string, boolean>;
 }

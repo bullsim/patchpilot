@@ -1,7 +1,7 @@
 name: Release
 
-# Publishes a signed PatchPilot build to GitHub Releases when you push a
-# version tag (e.g. v0.2.0). Each machine's app auto-updates from the release.
+# Push a version tag (e.g. v0.3.0) → build + sign installers for every platform,
+# publish them to GitHub Releases, then deploy to the Hetzner update host.
 on:
   push:
     tags:
@@ -15,28 +15,37 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: windows-latest
+          - platform: windows-latest          # Windows x64
             args: ""
-          # Uncomment as Phase 2/3 land:
-          # - platform: macos-latest
-          #   args: "--target universal-apple-darwin"
-          # - platform: ubuntu-22.04
-          #   args: ""
+          - platform: macos-latest            # macOS universal (Intel + Apple Silicon)
+            args: "--target universal-apple-darwin"
+          - platform: ubuntu-22.04            # Linux x64 (.deb + AppImage)
+            args: ""
+          - platform: ubuntu-24.04-arm        # Linux ARM64 (Raspberry Pi 64-bit, ARM servers)
+            args: ""
 
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
 
-      - name: Install frontend deps
-        run: npm ci
+      - name: Add macOS universal targets
+        if: matrix.platform == 'macos-latest'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: Install Linux deps
+        if: startsWith(matrix.platform, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf build-essential curl wget file libxdo-dev libssl-dev
+
+      - run: npm ci
 
       - name: Build, sign & publish
         uses: tauri-apps/tauri-action@v0
@@ -47,9 +56,36 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "PatchPilot ${{ github.ref_name }}"
-          releaseBody: "See the assets below to download and install."
           releaseDraft: false
           prerelease: false
-          # tauri-action generates latest.json (the updater manifest) automatically.
           includeUpdaterJson: true
           args: ${{ matrix.args }}
+
+  # Push the freshly published installers + latest.json to the Hetzner update host.
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p out
+          gh release download "${{ github.ref_name }}" -R "${{ github.repository }}" -D out
+
+      - name: Rsync to Hetzner (skipped if secrets unset)
+        env:
+          HETZNER_HOST: ${{ secrets.HETZNER_HOST }}
+          HETZNER_USER: ${{ secrets.HETZNER_USER }}
+          HETZNER_SSH_KEY: ${{ secrets.HETZNER_SSH_KEY }}
+        run: |
+          if [ -z "$HETZNER_HOST" ]; then
+            echo "HETZNER_HOST secret not set — skipping deploy (GitHub Releases still has the files)."
+            exit 0
+          fi
+          mkdir -p ~/.ssh
+          printf '%s\n' "$HETZNER_SSH_KEY" > ~/.ssh/id_key
+          chmod 600 ~/.ssh/id_key
+          ssh-keyscan -H "$HETZNER_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          rsync -avz -e "ssh -i ~/.ssh/id_key" out/ \
+            "$HETZNER_USER@$HETZNER_HOST:/var/www/patchpilot/updates/"

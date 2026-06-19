@@ -10,11 +10,13 @@ pub struct ComponentMeta {
     pub applies: fn(&SystemInfo) -> bool,
 }
 
+#[allow(dead_code)]
 fn always(_: &SystemInfo) -> bool {
     true
 }
 
-/// All components, in run order (matches v5.3).
+/// All components for the current OS, in run order.
+#[cfg(windows)]
 pub fn registry() -> Vec<ComponentMeta> {
     use Category::*;
     vec![
@@ -29,6 +31,27 @@ pub fn registry() -> Vec<ComponentMeta> {
         ComponentMeta { id: "razer",          name: "Razer Stack",        category: Software, applies: |s| s.app_razer },
         ComponentMeta { id: "logitech",       name: "Logitech Stack",     category: Software, applies: |s| s.app_logitech },
         ComponentMeta { id: "crucial",        name: "Crucial Stack",      category: Software, applies: |s| s.app_crucial },
+    ]
+}
+
+#[cfg(target_os = "macos")]
+pub fn registry() -> Vec<ComponentMeta> {
+    use Category::*;
+    vec![
+        ComponentMeta { id: "macos-update", name: "macOS Software Update", category: Firmware, applies: always },
+        ComponentMeta { id: "brew",         name: "Homebrew",             category: Software, applies: |s| s.has_brew },
+        ComponentMeta { id: "mas",          name: "Mac App Store",        category: Software, applies: |s| s.has_mas },
+    ]
+}
+
+#[cfg(target_os = "linux")]
+pub fn registry() -> Vec<ComponentMeta> {
+    use Category::*;
+    vec![
+        ComponentMeta { id: "apt",     name: "APT Packages",      category: Software, applies: always },
+        ComponentMeta { id: "flatpak", name: "Flatpak",           category: Software, applies: |s| s.has_flatpak },
+        ComponentMeta { id: "snap",    name: "Snap",              category: Software, applies: |s| s.has_snap },
+        ComponentMeta { id: "fwupd",   name: "Firmware (fwupd)",  category: Firmware, applies: |s| s.has_fwupd },
     ]
 }
 

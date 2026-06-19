@@ -102,7 +102,7 @@ pub async fn run_all(
     cfg: AppConfig,
     reporter: Arc<dyn Reporter>,
     cancel: Arc<AtomicBool>,
-) {
+) -> RunSummary {
     let started = Instant::now();
     let tracker = Tracker::new(reporter);
     let comps = selection(mode, &sys, &cfg);
@@ -165,4 +165,5 @@ pub async fn run_all(
         summary.duration_secs
     ));
     tracker.inner.finished(&summary);
+    summary
 }
