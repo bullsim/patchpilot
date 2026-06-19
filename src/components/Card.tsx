@@ -33,11 +33,25 @@ const ICON: Record<string, string> = {
   fwupd: "🔌",
 };
 
-export function Card({ s }: { s: ComponentStatus }) {
+export function Card({
+  s,
+  onClick,
+  disabled,
+}: {
+  s: ComponentStatus;
+  onClick?: () => void;
+  disabled?: boolean;
+}) {
   const color = COLOR[s.status] ?? COLOR.Pending;
   const showBar = s.progress >= 0 && s.status === "Running";
+  const clickable = !!onClick && !disabled;
   return (
-    <div className="ucard" style={{ ["--c" as string]: color }}>
+    <div
+      className={`ucard${clickable ? " clickable" : ""}`}
+      style={{ ["--c" as string]: color }}
+      onClick={clickable ? onClick : undefined}
+      title={clickable ? `Update ${s.name} now` : undefined}
+    >
       <div className="ucard-head">
         <span className="ucard-emoji">{ICON[s.id] ?? "⚙️"}</span>
         <span className="ucard-status">

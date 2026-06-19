@@ -31,6 +31,13 @@ impl RunMode {
             _ => RunMode::All,
         }
     }
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            RunMode::All => "All",
+            RunMode::Software => "Software",
+            RunMode::Firmware => "Firmware",
+        }
+    }
     pub fn includes(&self, cat: Category) -> bool {
         match self {
             RunMode::All => true,

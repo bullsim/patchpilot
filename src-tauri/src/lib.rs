@@ -4,6 +4,7 @@ mod orchestrator;
 mod paths;
 mod registry;
 mod reboot;
+mod schedule;
 mod system_info;
 mod updaters;
 mod util;
@@ -107,8 +108,15 @@ fn get_config() -> Result<AppConfig, String> {
 }
 
 #[tauri::command]
-fn save_config(config: AppConfig) -> Result<(), String> {
-    config::save(&config).map_err(|e| e.to_string())
+async fn save_config(config: AppConfig) -> Result<(), String> {
+    config::save(&config).map_err(|e| e.to_string())?;
+    // Keep the OS scheduled task in sync with the chosen schedule.
+    schedule::apply(
+        config.schedule_enabled,
+        &config.schedule_time,
+        config.scheduled_run_mode.as_str(),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -137,6 +145,31 @@ async fn start_run(mode: RunMode, app: AppHandle, state: State<'_, AppState>) ->
 
     tauri::async_runtime::spawn(async move {
         let summary = orchestrator::run_all(mode, sys.clone(), cfg, reporter, cancel).await;
+        report_status(&report_url, &sys, &summary).await;
+        running.store(false, Ordering::SeqCst);
+    });
+    Ok(())
+}
+
+#[tauri::command]
+async fn run_one(id: String, app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    if state.running.swap(true, Ordering::SeqCst) {
+        return Err("A run is already in progress".into());
+    }
+    state.cancel.store(false, Ordering::SeqCst);
+
+    let sys = cached_sys(&state).await;
+    let cfg = config::load();
+    let cancel = state.cancel.clone();
+    let running = state.running.clone();
+    let report_url = cfg.report_url.clone();
+    let reporter: Arc<dyn Reporter> = Arc::new(EventReporter {
+        app: app.clone(),
+        log: FileLog::new(),
+    });
+
+    tauri::async_runtime::spawn(async move {
+        let summary = orchestrator::run_one(&id, sys.clone(), cfg, reporter, cancel).await;
         report_status(&report_url, &sys, &summary).await;
         running.store(false, Ordering::SeqCst);
     });
@@ -258,6 +291,7 @@ pub fn run() {
             save_config,
             plan_run,
             start_run,
+            run_one,
             cancel_run,
             open_latest_log,
             schedule_reboot,

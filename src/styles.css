@@ -340,10 +340,20 @@ body {
   overflow: hidden;
   transition: transform 0.12s, border-color 0.15s, background 0.15s;
 }
+.ucard.clickable {
+  cursor: pointer;
+}
 .ucard:hover {
   transform: translateY(-2px);
   background: var(--surface-2);
   border-color: var(--border-strong);
+}
+.ucard.clickable:hover {
+  border-color: var(--c, var(--blue));
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.ucard.clickable:active {
+  transform: translateY(0);
 }
 .ucard::before {
   content: "";
@@ -565,6 +575,9 @@ body {
   width: 16px;
   height: 16px;
 }
+.toggle-spaced { margin-bottom: 12px; }
+.field-row { display: flex; gap: 12px; }
+.field-row .field { flex: 1; }
 .modal-actions {
   display: flex;
   justify-content: flex-end;

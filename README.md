@@ -88,13 +88,18 @@ All-platform installers are built by CI on every version tag (see "Cutting a rel
 
 ## Scheduled (headless) runs
 
-The app can run with no window for Task Scheduler:
+**Easiest — in the app:** open **Settings** → tick **"Run automatically every day"**, pick a
+time and run mode, **Save**. PatchPilot registers the OS task for you (Windows Task Scheduler /
+macOS launchd / Linux user systemd timer) and keeps it in sync. On Windows the task runs
+elevated, so updates apply with no prompt.
+
+The app can also run headless directly:
 
 ```bash
 patchpilot.exe --silent --mode All        # or Software / Firmware
 ```
 
-Register a daily task per OS:
+Or register a daily task manually with the helper scripts:
 
 ```powershell
 # Windows (elevated PowerShell)

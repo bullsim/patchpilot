@@ -22,6 +22,8 @@ export const planRun = (mode: RunMode) =>
   invoke<ComponentStatus[]>("plan_run", { mode });
 
 export const startRun = (mode: RunMode) => invoke<void>("start_run", { mode });
+/** Run a single component by id (clicking a card). */
+export const startRunOne = (id: string) => invoke<void>("run_one", { id });
 export const cancelRun = () => invoke<void>("cancel_run");
 export const openLatestLog = () => invoke<void>("open_latest_log");
 

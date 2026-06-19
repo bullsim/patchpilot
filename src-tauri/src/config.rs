@@ -38,6 +38,11 @@ pub struct AppConfig {
     /// Fleet dashboard endpoint; empty disables reporting.
     #[serde(default = "default_report_url")]
     pub report_url: String,
+    /// Daily auto-run schedule.
+    #[serde(default)]
+    pub schedule_enabled: bool,
+    #[serde(default = "default_schedule_time")]
+    pub schedule_time: String,
     /// Home Assistant base URL (e.g. http://homeassistant.local:8123); empty disables it.
     #[serde(default)]
     pub ha_url: String,
@@ -57,6 +62,10 @@ fn default_report_url() -> String {
     String::new()
 }
 
+fn default_schedule_time() -> String {
+    "03:00".to_string()
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         let mut components = BTreeMap::new();
@@ -67,6 +76,8 @@ impl Default for AppConfig {
             scheduled_run_mode: RunMode::All,
             teams_webhook: String::new(),
             report_url: default_report_url(),
+            schedule_enabled: false,
+            schedule_time: default_schedule_time(),
             ha_url: String::new(),
             ha_token: String::new(),
             components,

@@ -21,6 +21,7 @@ export default function App() {
   const [running, setRunning] = useState(false);
   const [mode, setMode] = useState<RunMode>("All");
   const [summary, setSummary] = useState<RunSummary | null>(null);
+  const [multi, setMulti] = useState(false); // true = Run-All/mode run; false = single card
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
@@ -76,6 +77,11 @@ export default function App() {
   useEffect(() => {
     api.getSystemInfo().then(setSys).catch(console.error);
     api.getConfig().then(setConfig).catch(console.error);
+    // Show idle component cards immediately so any can be clicked to run on its own.
+    api
+      .planRun("All")
+      .then((p) => setCards(new Map(p.map((c) => [c.id, c]))))
+      .catch(() => {});
     api.getPendingReboot().then((iso) => {
       if (iso) setRebootScheduled(`Restart scheduled for ${fmtWhen(iso)}`);
     });
@@ -132,6 +138,7 @@ export default function App() {
 
   const run = useCallback(async (m: RunMode) => {
     setMode(m);
+    setMulti(true);
     setSummary(null);
     setRebootCountdown(null);
     rebootDeadline.current = null;
@@ -145,6 +152,27 @@ export default function App() {
       setRunning(false);
     });
   }, []);
+
+  // Click one card → update just that component.
+  const runOne = useCallback(
+    async (id: string) => {
+      if (running) return;
+      setMulti(false);
+      setSummary(null);
+      setCards((prev) => {
+        const n = new Map(prev);
+        const c = n.get(id);
+        if (c) n.set(id, { ...c, status: "Running", detail: "Starting…", progress: 0 });
+        return n;
+      });
+      setRunning(true);
+      await api.startRunOne(id).catch((e) => {
+        console.error(e);
+        setRunning(false);
+      });
+    },
+    [running]
+  );
 
   const sorted = useMemo(
     () => [...cards.values()].sort((a, b) => a.name.localeCompare(b.name)),
@@ -248,7 +276,7 @@ export default function App() {
         )}
       </div>
 
-      {(running || summary) && (
+      {(running || summary) && multi && (
         <section className="summary">
           <ProgressRing pct={overall} color={stateColor} />
           <div className="summary-info">
@@ -270,13 +298,13 @@ export default function App() {
 
       <main className="grid">
         {sorted.map((c) => (
-          <Card key={c.id} s={c} />
+          <Card key={c.id} s={c} onClick={() => runOne(c.id)} disabled={running} />
         ))}
         {sorted.length === 0 && (
           <div className="empty">
             <div>
               <div className="empty-big">🚀</div>
-              Pick a run mode to bring this machine up to date.
+              Detecting components… or pick a run mode above.
             </div>
           </div>
         )}
@@ -305,6 +333,13 @@ export default function App() {
             await api.saveConfig(c);
             setConfig(c);
             setShowSettings(false);
+            // Refresh cards so newly-configured components (e.g. Home Assistant) appear.
+            if (!running) {
+              api
+                .planRun("All")
+                .then((p) => setCards(new Map(p.map((x) => [x.id, x]))))
+                .catch(() => {});
+            }
           }}
           onClose={() => setShowSettings(false)}
         />

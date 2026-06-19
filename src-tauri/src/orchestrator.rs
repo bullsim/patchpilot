@@ -105,9 +105,33 @@ pub async fn run_all(
     reporter: Arc<dyn Reporter>,
     cancel: Arc<AtomicBool>,
 ) -> RunSummary {
+    let comps = selection(mode, &sys, &cfg);
+    run_list(mode, comps, sys, cfg, reporter, cancel).await
+}
+
+/// Run a single component by id (used when a card is clicked in the UI).
+pub async fn run_one(
+    id: &str,
+    sys: Arc<SystemInfo>,
+    cfg: AppConfig,
+    reporter: Arc<dyn Reporter>,
+    cancel: Arc<AtomicBool>,
+) -> RunSummary {
+    let comps: Vec<crate::registry::ComponentMeta> =
+        crate::registry::registry().into_iter().filter(|m| m.id == id).collect();
+    run_list(RunMode::All, comps, sys, cfg, reporter, cancel).await
+}
+
+async fn run_list(
+    mode: RunMode,
+    comps: Vec<crate::registry::ComponentMeta>,
+    sys: Arc<SystemInfo>,
+    cfg: AppConfig,
+    reporter: Arc<dyn Reporter>,
+    cancel: Arc<AtomicBool>,
+) -> RunSummary {
     let started = Instant::now();
     let tracker = Tracker::new(reporter);
-    let comps = selection(mode, &sys, &cfg);
 
     tracker.log(&format!(
         "=== PatchPilot run [{mode:?}] on {} {} — {} components ===",

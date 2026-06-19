@@ -21,19 +21,39 @@ export function SettingsPanel({ config, onSave, onClose }: Props) {
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>Settings</h2>
 
-        <label className="field">
-          <span>Scheduled run mode</span>
-          <select
-            value={draft.scheduledRunMode}
-            onChange={(e) =>
-              setDraft((d) => ({ ...d, scheduledRunMode: e.target.value as RunMode }))
-            }
-          >
-            <option value="All">All</option>
-            <option value="Software">Software</option>
-            <option value="Firmware">Firmware</option>
-          </select>
+        <label className="toggle toggle-spaced">
+          <input
+            type="checkbox"
+            checked={draft.scheduleEnabled}
+            onChange={(e) => setDraft((d) => ({ ...d, scheduleEnabled: e.target.checked }))}
+          />
+          <span>Run automatically every day</span>
         </label>
+
+        <div className="field-row">
+          <label className="field">
+            <span>Time</span>
+            <input
+              type="time"
+              value={draft.scheduleTime}
+              disabled={!draft.scheduleEnabled}
+              onChange={(e) => setDraft((d) => ({ ...d, scheduleTime: e.target.value }))}
+            />
+          </label>
+          <label className="field">
+            <span>Run mode</span>
+            <select
+              value={draft.scheduledRunMode}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, scheduledRunMode: e.target.value as RunMode }))
+              }
+            >
+              <option value="All">All</option>
+              <option value="Software">Software</option>
+              <option value="Firmware">Firmware</option>
+            </select>
+          </label>
+        </div>
 
         <label className="field">
           <span>Teams webhook (optional)</span>
