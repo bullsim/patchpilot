@@ -147,6 +147,21 @@ export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
 npm run tauri build
 ```
 
+## NVIDIA GPU drivers
+
+winget only updates the **NVIDIA App** shell — the GPU driver in its *Drivers* tab has no
+silent CLI. PatchPilot installs the actual driver via
+[TinyNvidiaUpdateChecker](https://github.com/ZenitH-AT/TinyNvidiaUpdateChecker) if it's
+installed:
+
+```powershell
+winget install ZenitH-AT.TinyNvidiaUpdateChecker
+```
+
+Run it once to choose **Studio** vs **Game Ready** (it remembers the choice); after that the
+Nvidia card auto-installs the latest driver headlessly. If TNUC isn't installed, the card says
+so and the driver stays a manual click in the NVIDIA App.
+
 ## Notes
 
 - Updaters are added to `registry.rs` (metadata + `applies`) and `updaters.rs` (the work).

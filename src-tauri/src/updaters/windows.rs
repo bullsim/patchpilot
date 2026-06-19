@@ -187,36 +187,49 @@ async fn surface(ctx: &Ctx) {
 }
 
 // ---- 7. Nvidia Stack ----
+// winget only updates the NVIDIA App shell; the actual GPU driver (shown in the
+// App's Drivers tab) has no silent CLI. TinyNvidiaUpdateChecker installs it
+// headlessly (Studio + Game Ready). We use it if it's installed.
 async fn nvidia(ctx: &Ctx) {
-    ctx.rep.set(Status::Running, "Stopping NVIDIA processes…", 10);
-    kill_processes(&[
-        "NVIDIA App",
-        "nvcontainer",
-        "NVDisplay.Container",
-        "NVIDIA Web Helper",
-        "nvcplui",
-        "nvsphelper64",
-    ])
-    .await;
-    sleep(Duration::from_secs(3)).await;
-
     ctx.rep.set(Status::Running, "Updating NVIDIA App…", 30);
     let app = winget_upgrade("Nvidia.NVIDIAApp", 300).await;
-
-    ctx.rep.set(Status::Running, "Updating NVIDIA drivers…", 70);
-    let drv = winget_upgrade("Nvidia.GeForce.Experience", 600).await;
-
     let app_ok = is_winget_ok(app.code);
-    let drv_ok = is_winget_ok(drv.code);
-    if app_ok && drv_ok {
-        ctx.rep.set(Status::Success, "NVIDIA App + drivers up to date", 100);
-    } else if app_ok {
-        ctx.rep.set(Status::Warning, &format!("App ok; driver exit {:?}", drv.code), 50);
-    } else if drv_ok {
-        ctx.rep.set(Status::Warning, &format!("Driver ok; app exit {:?}", app.code), 50);
-    } else {
-        ctx.rep.set(Status::Warning, &format!("App {:?} / Driver {:?}", app.code, drv.code), 50);
+
+    let Some(tnuc) = locate_tnuc().await else {
+        ctx.rep.set(
+            Status::Warning,
+            "App updated — install TinyNvidiaUpdateChecker to auto-install the GPU driver",
+            55,
+        );
+        let _ = app_ok;
+        return;
+    };
+
+    // The driver installer wants the NVIDIA App/containers stopped.
+    ctx.rep.set(Status::Running, "Installing latest GPU driver…", 70);
+    kill_processes(&["NVIDIA App", "nvcontainer", "NVDisplay.Container", "NVIDIA Web Helper"]).await;
+    sleep(Duration::from_secs(2)).await;
+
+    let drv = run_cmd(&tnuc, &["--quiet", "--no-prompt"], Duration::from_secs(2400)).await;
+    match drv.code {
+        Some(0) => ctx.rep.set(Status::Success, "NVIDIA App + GPU driver up to date", 100),
+        None if drv.timed_out => ctx.rep.set(Status::Warning, "Driver install timed out", 60),
+        c => ctx.rep.set(Status::Warning, &format!("App ok; driver checker exit {c:?}"), 60),
     }
+}
+
+/// Find TinyNvidiaUpdateChecker.exe on PATH (winget adds a shim there).
+async fn locate_tnuc() -> Option<String> {
+    let w = run_cmd("where", &["TinyNvidiaUpdateChecker.exe"], Duration::from_secs(15)).await;
+    if w.code == Some(0) {
+        if let Some(line) = w.stdout.lines().next() {
+            let p = line.trim();
+            if !p.is_empty() {
+                return Some(p.to_string());
+            }
+        }
+    }
+    None
 }
 
 // ---- 8. Intel GPU Stack ----
