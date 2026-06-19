@@ -60,32 +60,3 @@ jobs:
           prerelease: false
           includeUpdaterJson: true
           args: ${{ matrix.args }}
-
-  # Push the freshly published installers + latest.json to the Hetzner update host.
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download release assets
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          mkdir -p out
-          gh release download "${{ github.ref_name }}" -R "${{ github.repository }}" -D out
-
-      - name: Rsync to Hetzner (skipped if secrets unset)
-        env:
-          HETZNER_HOST: ${{ secrets.HETZNER_HOST }}
-          HETZNER_USER: ${{ secrets.HETZNER_USER }}
-          HETZNER_SSH_KEY: ${{ secrets.HETZNER_SSH_KEY }}
-        run: |
-          if [ -z "$HETZNER_HOST" ]; then
-            echo "HETZNER_HOST secret not set — skipping deploy (GitHub Releases still has the files)."
-            exit 0
-          fi
-          mkdir -p ~/.ssh
-          printf '%s\n' "$HETZNER_SSH_KEY" > ~/.ssh/id_key
-          chmod 600 ~/.ssh/id_key
-          ssh-keyscan -H "$HETZNER_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
-          rsync -avz -e "ssh -i ~/.ssh/id_key" out/ \
-            "$HETZNER_USER@$HETZNER_HOST:/var/www/patchpilot/updates/"

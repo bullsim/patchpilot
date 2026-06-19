@@ -17,13 +17,16 @@ pub const COMPONENT_NAMES: &[&str] = &[
     "Razer Stack",
     "Logitech Stack",
     "Crucial Stack",
+    "Home Assistant",
 ];
 
 #[cfg(target_os = "macos")]
-pub const COMPONENT_NAMES: &[&str] = &["macOS Software Update", "Homebrew", "Mac App Store"];
+pub const COMPONENT_NAMES: &[&str] =
+    &["macOS Software Update", "Homebrew", "Mac App Store", "Home Assistant"];
 
 #[cfg(target_os = "linux")]
-pub const COMPONENT_NAMES: &[&str] = &["APT Packages", "Flatpak", "Snap", "Firmware (fwupd)"];
+pub const COMPONENT_NAMES: &[&str] =
+    &["APT Packages", "Flatpak", "Snap", "Firmware (fwupd)", "Home Assistant"];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,6 +38,12 @@ pub struct AppConfig {
     /// Fleet dashboard endpoint; empty disables reporting.
     #[serde(default = "default_report_url")]
     pub report_url: String,
+    /// Home Assistant base URL (e.g. http://homeassistant.local:8123); empty disables it.
+    #[serde(default)]
+    pub ha_url: String,
+    /// Home Assistant long-lived access token.
+    #[serde(default)]
+    pub ha_token: String,
     #[serde(default)]
     pub components: BTreeMap<String, bool>,
 }
@@ -44,7 +53,8 @@ fn default_mode() -> RunMode {
 }
 
 fn default_report_url() -> String {
-    "https://patchpilot.bullers.com/api/report".to_string()
+    // Fleet dashboard is opt-in; empty = off. Set a URL in Settings to enable.
+    String::new()
 }
 
 impl Default for AppConfig {
@@ -57,6 +67,8 @@ impl Default for AppConfig {
             scheduled_run_mode: RunMode::All,
             teams_webhook: String::new(),
             report_url: default_report_url(),
+            ha_url: String::new(),
+            ha_token: String::new(),
             components,
         }
     }

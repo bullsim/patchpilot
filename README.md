@@ -1,21 +1,35 @@
 # PatchPilot
 
-A slick cross-platform desktop app that keeps your machines up to date. It is the
-successor to `daily_updates_v5.3.ps1` — the same proven update engine, rebuilt as a real
-app with a live UI and a path to macOS and Linux.
+A slick cross-platform desktop app that keeps your machines up to date — Dell, Surface,
+Mac, Zorin, Raspberry Pi. The same proven engine as `daily_updates_v5.3.ps1`, rebuilt as a
+real app with a live UI, per-OS detection, and signed self-update.
 
-- **Windows (now):** Windows Update, Microsoft Store, winget, Office C2R, Dell Command
-  Update, Surface, Nvidia, Intel, Razer, Logitech, Crucial.
+What it updates (only what's already installed — see the principle below):
 
-> **Principle: update what's installed, never install new software.** PatchPilot only
-> upgrades apps/firmware tools that are already present on the machine. Components that
-> aren't installed (e.g. Crucial Storage Executive, Intel DSA, Dell Command Update) are
-> skipped, not installed. `winget upgrade --all` likewise only updates existing packages.
+- **Windows:** Windows Update, Microsoft Store, winget, Office C2R, Dell Command Update,
+  Surface, Nvidia, Intel, Razer, Logitech, Crucial.
 - **macOS:** `softwareupdate`, `brew`, `mas`.
 - **Linux / Zorin / Raspberry Pi:** `apt`, `flatpak`, `snap`, `fwupdmgr`.
 
-Builds for Windows x64, macOS (universal), Linux x64, and Linux ARM64 (Raspberry Pi 64-bit).
-Each machine auto-detects its own hardware and only shows components relevant to it.
+> **Principle: update what's installed, never install new software.** PatchPilot only
+> upgrades apps/firmware already present on the machine; anything not installed is skipped,
+> not installed.
+
+## ⬇️ Download & install
+
+Grab the latest build for each machine from the **Releases** page:
+
+### **https://github.com/bullsim/patchpilot/releases/latest**
+
+| Machine | File to download |
+|---|---|
+| Windows (Dell, Surface, x64) | `PatchPilot_*_x64-setup.exe` |
+| macOS (Intel + Apple Silicon) | `PatchPilot_*_universal.dmg` |
+| Linux x64 (Zorin, Ubuntu) | `PatchPilot_*_amd64.deb` or `*_amd64.AppImage` |
+| Raspberry Pi / ARM64 Linux | `PatchPilot_*_arm64.deb` or `*_aarch64.AppImage` |
+
+Install once per machine — after that the app **auto-updates itself** from new releases.
+No build tools needed on the target machines; only this dev machine builds.
 
 ## Stack
 
@@ -37,10 +51,10 @@ src/                       React UI
 src-tauri/src/
   model.rs                 Status / Category / RunMode / ComponentStatus / RunSummary
   system_info.rs           hardware + OS detection (Dell/Surface/Nvidia/Intel/apps)
-  config.rs                load/save config.json (+ the 11 component names)
-  registry.rs              ComponentMeta + applies() + mode/config selection
+  config.rs                load/save config.json (per-OS component names)
+  registry.rs              ComponentMeta + applies() + mode/config selection (per OS)
   orchestrator.rs          Reporter trait, sequencing, counts, summary, reboot flag
-  updaters.rs              the 11 Windows updaters (ported from v5.3)
+  updaters/               per-OS backends: windows.rs / macos.rs / linux.rs
   reboot.rs                schedule / cancel / query reboot (schtasks)
   util.rs                  run-with-timeout, winget exit-code mapping, process kill
   paths.rs                 per-user app-data dirs (config, logs, reboot marker)
@@ -67,9 +81,10 @@ npm run tauri dev      # hot-reload UI + Rust
 
 ```bash
 npm run tauri build
-# -> src-tauri/target/release/patchpilot.exe
-# -> src-tauri/target/release/bundle/msi/PatchPilot_x.y.z_x64_en-US.msi
+# -> src-tauri/target/release/bundle/nsis/PatchPilot_x.y.z_x64-setup.exe
 ```
+
+All-platform installers are built by CI on every version tag (see "Cutting a release").
 
 ## Scheduled (headless) runs
 
@@ -94,12 +109,6 @@ sudo ./install-schedule-linux.sh 03:00 All
 
 All three invoke the same `--silent --mode` headless path. Updates require admin/root;
 on Windows the GUI app auto-elevates, mac/Linux prompt via the OS when needed.
-
-## Fleet dashboard
-
-Each run POSTs a small status report to the dashboard URL in Settings (default
-`patchpilot.bullers.com/api/report`; blank to disable). See [`server/`](server/) for the
-self-hosted dashboard + update host (Caddy + systemd, e.g. on Hetzner).
 
 ## Auto-update (the app updates itself)
 

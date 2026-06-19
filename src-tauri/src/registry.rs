@@ -31,6 +31,7 @@ pub fn registry() -> Vec<ComponentMeta> {
         ComponentMeta { id: "razer",          name: "Razer Stack",        category: Software, applies: |s| s.app_razer },
         ComponentMeta { id: "logitech",       name: "Logitech Stack",     category: Software, applies: |s| s.app_logitech },
         ComponentMeta { id: "crucial",        name: "Crucial Stack",      category: Software, applies: |s| s.app_crucial },
+        ComponentMeta { id: "homeassistant",  name: "Home Assistant",     category: Software, applies: always },
     ]
 }
 
@@ -41,6 +42,7 @@ pub fn registry() -> Vec<ComponentMeta> {
         ComponentMeta { id: "macos-update", name: "macOS Software Update", category: Firmware, applies: always },
         ComponentMeta { id: "brew",         name: "Homebrew",             category: Software, applies: |s| s.has_brew },
         ComponentMeta { id: "mas",          name: "Mac App Store",        category: Software, applies: |s| s.has_mas },
+        ComponentMeta { id: "homeassistant", name: "Home Assistant",      category: Software, applies: always },
     ]
 }
 
@@ -52,6 +54,7 @@ pub fn registry() -> Vec<ComponentMeta> {
         ComponentMeta { id: "flatpak", name: "Flatpak",           category: Software, applies: |s| s.has_flatpak },
         ComponentMeta { id: "snap",    name: "Snap",              category: Software, applies: |s| s.has_snap },
         ComponentMeta { id: "fwupd",   name: "Firmware (fwupd)",  category: Firmware, applies: |s| s.has_fwupd },
+        ComponentMeta { id: "homeassistant", name: "Home Assistant", category: Software, applies: always },
     ]
 }
 
@@ -62,5 +65,7 @@ pub fn selection(mode: RunMode, sys: &SystemInfo, cfg: &AppConfig) -> Vec<Compon
         .filter(|m| mode.includes(m.category))
         .filter(|m| (m.applies)(sys))
         .filter(|m| cfg.enabled(m.name))
+        // Home Assistant only appears once a URL is configured.
+        .filter(|m| m.id != "homeassistant" || !cfg.ha_url.trim().is_empty())
         .collect()
 }

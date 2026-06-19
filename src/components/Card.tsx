@@ -21,6 +21,16 @@ const ICON: Record<string, string> = {
   razer: "🐍",
   logitech: "🖱️",
   crucial: "💾",
+  homeassistant: "🏠",
+  // macOS
+  "macos-update": "🍎",
+  brew: "🍺",
+  mas: "🛍️",
+  // Linux
+  apt: "📦",
+  flatpak: "📦",
+  snap: "📦",
+  fwupd: "🔌",
 };
 
 export function Card({ s }: { s: ComponentStatus }) {

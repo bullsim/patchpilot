@@ -46,12 +46,22 @@ export function SettingsPanel({ config, onSave, onClose }: Props) {
         </label>
 
         <label className="field">
-          <span>Fleet dashboard URL (blank = off)</span>
+          <span>Home Assistant URL (blank = off)</span>
           <input
             type="text"
-            value={draft.reportUrl}
-            placeholder="https://patchpilot.bullers.com/api/report"
-            onChange={(e) => setDraft((d) => ({ ...d, reportUrl: e.target.value }))}
+            value={draft.haUrl}
+            placeholder="http://homeassistant.local:8123"
+            onChange={(e) => setDraft((d) => ({ ...d, haUrl: e.target.value }))}
+          />
+        </label>
+
+        <label className="field">
+          <span>Home Assistant token (long-lived access token)</span>
+          <input
+            type="password"
+            value={draft.haToken}
+            placeholder="paste from HA → Profile → Long-lived tokens"
+            onChange={(e) => setDraft((d) => ({ ...d, haToken: e.target.value }))}
           />
         </label>
 

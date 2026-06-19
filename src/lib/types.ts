@@ -49,5 +49,7 @@ export interface AppConfig {
   scheduledRunMode: RunMode;
   teamsWebhook: string;
   reportUrl: string;
+  haUrl: string;
+  haToken: string;
   components: Record<string, boolean>;
 }

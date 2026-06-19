@@ -72,6 +72,8 @@ pub struct Ctx {
     #[allow(dead_code)]
     pub sys: Arc<SystemInfo>,
     pub cancel: Arc<AtomicBool>,
+    pub ha_url: String,
+    pub ha_token: String,
 }
 
 impl Ctx {
@@ -130,6 +132,8 @@ pub async fn run_all(
             rep,
             sys: sys.clone(),
             cancel: cancel.clone(),
+            ha_url: cfg.ha_url.clone(),
+            ha_token: cfg.ha_token.clone(),
         };
         updaters::run(meta.id, &ctx).await;
     }
