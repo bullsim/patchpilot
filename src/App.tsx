@@ -25,6 +25,7 @@ export default function App() {
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(true);
 
   const [rebootCountdown, setRebootCountdown] = useState<number | null>(null);
   const [rebootScheduled, setRebootScheduled] = useState<string | null>(null);
@@ -85,6 +86,7 @@ export default function App() {
     api.getPendingReboot().then((iso) => {
       if (iso) setRebootScheduled(`Restart scheduled for ${fmtWhen(iso)}`);
     });
+    api.getIsAdmin().then(setIsAdmin).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -255,6 +257,18 @@ export default function App() {
           </button>
         </div>
       </header>
+
+      {!isAdmin && (
+        <div className="admin-warn">
+          <span>
+            ⚠ Not running as administrator — Dell firmware, Microsoft Store, and driver
+            updates will fail without it.
+          </span>
+          <button type="button" className="rbtn warn" onClick={() => api.restartElevated()}>
+            Restart as admin
+          </button>
+        </div>
+      )}
 
       <div className="deck">
         <div className="run-modes">

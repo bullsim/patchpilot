@@ -16,6 +16,34 @@ pub async fn run(ctx: &Ctx) {
     let auth = format!("Authorization: Bearer {}", ctx.ha_token.trim());
 
     ctx.rep.set(Status::Running, "Checking Home Assistant…", 15);
+
+    // Probe /api/ to get a precise reason if something's wrong.
+    let probe = run_cmd(
+        "curl",
+        &["-s", "-o", "/dev/null", "-w", "%{http_code}", "-m", "20", "-H", &auth, &format!("{base}/api/")],
+        Duration::from_secs(25),
+    )
+    .await;
+    match probe.stdout.trim() {
+        "200" => {}
+        "401" | "403" => {
+            ctx.rep.set(Status::Warning, "HA rejected the token (401) — recreate it in HA → Profile → Security", 50);
+            return;
+        }
+        "404" => {
+            ctx.rep.set(Status::Warning, "HA API not found at that URL (drop any path, use host:8123)", 50);
+            return;
+        }
+        "000" | "" => {
+            ctx.rep.set(Status::Warning, &format!("Can't reach HA at {base} (URL/network)"), 50);
+            return;
+        }
+        other => {
+            ctx.rep.set(Status::Warning, &format!("HA returned HTTP {other}"), 50);
+            return;
+        }
+    }
+
     let states = run_cmd(
         "curl",
         &["-s", "-m", "30", "-H", &auth, &format!("{base}/api/states")],
@@ -24,7 +52,7 @@ pub async fn run(ctx: &Ctx) {
     .await;
 
     if !states.stdout.contains("entity_id") {
-        ctx.rep.set(Status::Warning, "Could not reach HA API (check URL/token)", 50);
+        ctx.rep.set(Status::Warning, "Connected, but no entities returned", 50);
         return;
     }
 

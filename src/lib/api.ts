@@ -33,6 +33,11 @@ export const scheduleReboot = (when: string) =>
 export const cancelReboot = () => invoke<void>("cancel_reboot");
 export const getPendingReboot = () => invoke<string | null>("get_pending_reboot");
 
+/** True if PatchPilot is running with admin/root (always true on mac/linux). */
+export const getIsAdmin = () => invoke<boolean>("is_admin");
+/** Relaunch elevated (Windows UAC). The current process exits if accepted. */
+export const restartElevated = () => invoke<void>("relaunch_elevated");
+
 // ---- Events (Rust -> UI) ----
 
 export const onComponentStatus = (cb: (s: ComponentStatus) => void): Promise<UnlistenFn> =>

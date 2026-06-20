@@ -273,6 +273,70 @@ async fn report_status(report_url: &str, sys: &SystemInfo, summary: &model::RunS
     .await;
 }
 
+// ---------------- elevation (Windows) ----------------
+
+/// Reliable admin check via the Windows token (IsInRole).
+#[cfg(windows)]
+pub fn is_elevated() -> bool {
+    use std::os::windows::process::CommandExt;
+    use std::process::Command;
+    Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            "if(([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){exit 0}else{exit 1}",
+        ])
+        .creation_flags(0x0800_0000)
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// Relaunch this exe elevated via UAC. Returns true if the elevated copy launched.
+#[cfg(windows)]
+pub fn elevate() -> bool {
+    use std::os::windows::process::CommandExt;
+    use std::process::Command;
+    let Ok(exe) = std::env::current_exe() else {
+        return false;
+    };
+    let path = exe.display().to_string().replace('\'', "''");
+    let ps = format!(
+        "try {{ Start-Process -FilePath '{path}' -ArgumentList '--no-elevate' -Verb RunAs; exit 0 }} catch {{ exit 1 }}"
+    );
+    Command::new("powershell")
+        .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &ps])
+        .creation_flags(0x0800_0000)
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+#[tauri::command]
+fn is_admin() -> bool {
+    #[cfg(windows)]
+    {
+        is_elevated()
+    }
+    #[cfg(not(windows))]
+    {
+        true // mac/linux updaters prompt per-command (osascript/pkexec)
+    }
+}
+
+#[tauri::command]
+fn relaunch_elevated() -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        if elevate() {
+            std::process::exit(0);
+        }
+        return Err("Elevation was cancelled".into());
+    }
+    #[cfg(not(windows))]
+    Ok(())
+}
+
 // ---------------- entry points ----------------
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -297,6 +361,8 @@ pub fn run() {
             schedule_reboot,
             cancel_reboot,
             get_pending_reboot,
+            is_admin,
+            relaunch_elevated,
         ])
         .run(tauri::generate_context!())
         .expect("error while running PatchPilot");
