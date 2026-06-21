@@ -23,12 +23,24 @@ use tauri::{AppHandle, Emitter, State};
 struct AppState {
     cancel: Arc<AtomicBool>,
     running: Arc<AtomicBool>,
-    sys: Mutex<Option<Arc<SystemInfo>>>,
+    sys: Arc<Mutex<Option<Arc<SystemInfo>>>>,
 }
 
 async fn cached_sys(state: &State<'_, AppState>) -> Arc<SystemInfo> {
     if let Some(s) = state.sys.lock().unwrap().clone() {
         return s;
+    }
+    // Instant first paint from the last cached detection; refresh in the background
+    // so the UI never freezes on a slow (esp. elevated) winget probe.
+    if let Some(cached) = system_info::load_cached() {
+        let arc = Arc::new(cached);
+        *state.sys.lock().unwrap() = Some(arc.clone());
+        let slot = state.sys.clone();
+        tauri::async_runtime::spawn(async move {
+            let fresh = Arc::new(system_info::detect().await);
+            *slot.lock().unwrap() = Some(fresh);
+        });
+        return arc;
     }
     let s = Arc::new(system_info::detect().await);
     *state.sys.lock().unwrap() = Some(s.clone());
@@ -347,7 +359,7 @@ pub fn run() {
         .manage(AppState {
             cancel: Arc::new(AtomicBool::new(false)),
             running: Arc::new(AtomicBool::new(false)),
-            sys: Mutex::new(None),
+            sys: Arc::new(Mutex::new(None)),
         })
         .invoke_handler(tauri::generate_handler![
             get_system_info,

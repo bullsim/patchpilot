@@ -35,7 +35,20 @@ pub async fn detect() -> SystemInfo {
     detect_macos(&mut info).await;
     #[cfg(target_os = "linux")]
     detect_linux(&mut info).await;
+    save_cache(&info);
     info
+}
+
+/// Last detection result, for instant first paint (refreshed in the background).
+pub fn load_cached() -> Option<SystemInfo> {
+    let txt = std::fs::read_to_string(crate::paths::app_dir().join("sysinfo.json")).ok()?;
+    serde_json::from_str(&txt).ok()
+}
+
+fn save_cache(info: &SystemInfo) {
+    if let Ok(txt) = serde_json::to_string(info) {
+        let _ = std::fs::write(crate::paths::app_dir().join("sysinfo.json"), txt);
+    }
 }
 
 /// True if a CLI tool is on PATH (unix).
@@ -79,12 +92,24 @@ struct RawInfo {
 
 #[cfg(windows)]
 async fn detect_windows(info: &mut SystemInfo) {
-    let res = run_cmd(
+    // Run hardware query + the four winget presence checks concurrently — sequential
+    // winget calls can take ~40s each (especially elevated), which froze the UI.
+    let hw = run_cmd(
         "powershell",
         &["-NoProfile", "-NonInteractive", "-Command", PS_QUERY],
         Duration::from_secs(30),
-    )
-    .await;
+    );
+    let (res, razer, logitech, crucial, intel) = tokio::join!(
+        hw,
+        winget_installed("RazerInc.RazerInstaller.Synapse4"),
+        winget_installed("Logitech.GHUB"),
+        winget_installed("Crucial.StorageExecutive"),
+        winget_installed("Intel.IntelDriverAndSupportAssistant"),
+    );
+    info.app_razer = razer;
+    info.app_logitech = logitech;
+    info.app_crucial = crucial;
+    info.app_intel_dsa = intel;
 
     if let Ok(raw) = serde_json::from_str::<RawInfo>(res.stdout.trim()) {
         let mfr = raw.manufacturer.unwrap_or_default().trim().to_string();
@@ -111,11 +136,6 @@ async fn detect_windows(info: &mut SystemInfo) {
         info.model = "Unknown".into();
         info.os = "Windows".into();
     }
-
-    info.app_razer = winget_installed("RazerInc.RazerInstaller.Synapse4").await;
-    info.app_logitech = winget_installed("Logitech.GHUB").await;
-    info.app_crucial = winget_installed("Crucial.StorageExecutive").await;
-    info.app_intel_dsa = winget_installed("Intel.IntelDriverAndSupportAssistant").await;
 }
 
 #[cfg(windows)]
@@ -123,7 +143,7 @@ async fn winget_installed(id: &str) -> bool {
     run_cmd(
         "winget",
         &["list", "--id", id, "--exact", "--accept-source-agreements"],
-        Duration::from_secs(40),
+        Duration::from_secs(25),
     )
     .await
     .combined()
