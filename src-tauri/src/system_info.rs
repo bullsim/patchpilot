@@ -18,6 +18,9 @@ pub struct SystemInfo {
     pub app_logitech: bool,
     pub app_crucial: bool,
     pub app_intel_dsa: bool,
+    pub has_choco: bool,
+    pub has_scoop: bool,
+    pub has_wsl: bool,
     // macOS
     pub has_brew: bool,
     pub has_mas: bool,
@@ -99,17 +102,23 @@ async fn detect_windows(info: &mut SystemInfo) {
         &["-NoProfile", "-NonInteractive", "-Command", PS_QUERY],
         Duration::from_secs(30),
     );
-    let (res, razer, logitech, crucial, intel) = tokio::join!(
+    let (res, razer, logitech, crucial, intel, choco, scoop, wsl) = tokio::join!(
         hw,
         winget_installed("RazerInc.RazerInstaller.Synapse4"),
         winget_installed("Logitech.GHUB"),
         winget_installed("Crucial.StorageExecutive"),
         winget_installed("Intel.IntelDriverAndSupportAssistant"),
+        on_path("choco"),
+        on_path("scoop"),
+        wsl_present(),
     );
     info.app_razer = razer;
     info.app_logitech = logitech;
     info.app_crucial = crucial;
     info.app_intel_dsa = intel;
+    info.has_choco = choco;
+    info.has_scoop = scoop;
+    info.has_wsl = wsl;
 
     if let Ok(raw) = serde_json::from_str::<RawInfo>(res.stdout.trim()) {
         let mfr = raw.manufacturer.unwrap_or_default().trim().to_string();
@@ -136,6 +145,18 @@ async fn detect_windows(info: &mut SystemInfo) {
         info.model = "Unknown".into();
         info.os = "Windows".into();
     }
+}
+
+/// True if `exe` is on PATH (via `where`).
+#[cfg(windows)]
+async fn on_path(exe: &str) -> bool {
+    run_cmd("where", &[exe], Duration::from_secs(15)).await.code == Some(0)
+}
+
+/// True if WSL is installed with at least one distro.
+#[cfg(windows)]
+async fn wsl_present() -> bool {
+    run_cmd("wsl", &["-l", "-q"], Duration::from_secs(15)).await.code == Some(0)
 }
 
 #[cfg(windows)]

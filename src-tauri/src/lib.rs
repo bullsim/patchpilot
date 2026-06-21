@@ -16,7 +16,9 @@ use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use system_info::SystemInfo;
-use tauri::{AppHandle, Emitter, State};
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 
 // ---------------- shared run state ----------------
 
@@ -287,6 +289,15 @@ async fn report_status(report_url: &str, sys: &SystemInfo, summary: &model::RunS
     .await;
 }
 
+/// Show + focus the main window (from tray).
+fn show_main(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.unminimize();
+        let _ = w.set_focus();
+    }
+}
+
 // ---------------- run history ----------------
 
 fn record_history(summary: &model::RunSummary) {
@@ -399,6 +410,45 @@ pub fn run() {
             cancel: Arc::new(AtomicBool::new(false)),
             running: Arc::new(AtomicBool::new(false)),
             sys: Arc::new(Mutex::new(None)),
+        })
+        .setup(|app| {
+            // System tray: run/show/quit + click-to-show.
+            let run_all = MenuItem::with_id(app, "run_all", "Run all updates", true, None::<&str>)?;
+            let show = MenuItem::with_id(app, "show", "Show PatchPilot", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&run_all, &show, &quit])?;
+            TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
+                .tooltip("PatchPilot")
+                .menu(&menu)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "run_all" => {
+                        show_main(app);
+                        let _ = app.emit("tray-run-all", ());
+                    }
+                    "show" => show_main(app),
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        show_main(tray.app_handle());
+                    }
+                })
+                .build(app)?;
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            // Close to tray instead of quitting; use the tray's Quit to exit.
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
         })
         .invoke_handler(tauri::generate_handler![
             get_system_info,

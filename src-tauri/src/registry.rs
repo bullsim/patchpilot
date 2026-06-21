@@ -21,8 +21,12 @@ pub fn registry() -> Vec<ComponentMeta> {
     use Category::*;
     vec![
         ComponentMeta { id: "windows-update", name: "Windows Update",     category: Software, applies: always },
+        ComponentMeta { id: "defender",       name: "Windows Defender",   category: Software, applies: always },
         ComponentMeta { id: "store",          name: "Microsoft Store",    category: Software, applies: always },
         ComponentMeta { id: "winget",         name: "Winget Packages",    category: Software, applies: always },
+        ComponentMeta { id: "choco",          name: "Chocolatey",         category: Software, applies: |s| s.has_choco },
+        ComponentMeta { id: "scoop",          name: "Scoop",              category: Software, applies: |s| s.has_scoop },
+        ComponentMeta { id: "wsl",            name: "WSL",                category: Software, applies: |s| s.has_wsl },
         ComponentMeta { id: "office",         name: "Microsoft Office",   category: Software, applies: always },
         ComponentMeta { id: "dell",           name: "Dell Stack",         category: Firmware, applies: |s| s.is_dell },
         ComponentMeta { id: "surface",        name: "Surface Stack",      category: Firmware, applies: |s| s.is_surface },

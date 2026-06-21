@@ -6,8 +6,11 @@ real app with a live UI, per-OS detection, and signed self-update.
 
 What it updates (only what's already installed — see the principle below):
 
-- **Windows:** Windows Update, Microsoft Store, winget, Office C2R, Dell Command Update,
-  Surface, Nvidia, Intel, Razer, Logitech, Crucial.
+- **Windows:** Windows Update, Defender signatures, Microsoft Store, winget, Chocolatey,
+  Scoop, WSL, Office C2R, Dell Command Update, Surface, Nvidia (via TinyNvidiaUpdateChecker),
+  Intel, Razer, Logitech, Crucial.
+- **Cross-platform:** Home Assistant (Core/OS/add-ons via its API).
+- Runs from the **system tray** (close hides to tray; "Run all updates" + Quit from the menu).
 - **macOS:** `softwareupdate`, `brew`, `mas`.
 - **Linux / Zorin / Raspberry Pi:** `apt`, `flatpak`, `snap`, `fwupdmgr`.
 

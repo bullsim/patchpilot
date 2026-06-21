@@ -12,8 +12,12 @@ use tokio::time::sleep;
 pub async fn run(id: &str, ctx: &Ctx) {
     match id {
         "windows-update" => windows_update(ctx).await,
+        "defender" => defender(ctx).await,
         "store" => store(ctx).await,
         "winget" => winget_all(ctx).await,
+        "choco" => choco(ctx).await,
+        "scoop" => scoop(ctx).await,
+        "wsl" => wsl(ctx).await,
         "office" => office(ctx).await,
         "dell" => dell(ctx).await,
         "surface" => surface(ctx).await,
@@ -87,6 +91,65 @@ async fn store(ctx: &Ctx) {
         ctx.rep.set(Status::Warning, "Store scan returned non-zero", 50);
     } else {
         ctx.rep.set(Status::Warning, "Could not reach Store update service", 50);
+    }
+}
+
+// ---- Windows Defender (signature update) ----
+async fn defender(ctx: &Ctx) {
+    ctx.rep.set(Status::Running, "Updating Defender signatures…", 40);
+    let res = run_cmd(
+        "powershell",
+        &["-NoProfile", "-Command", "Update-MpSignature; exit $LASTEXITCODE"],
+        Duration::from_secs(300),
+    )
+    .await;
+    match res.code {
+        Some(0) => ctx.rep.set(Status::Success, "Signatures up to date", 100),
+        _ => ctx.rep.set(Status::Warning, "Couldn't update signatures (3rd-party AV?)", 50),
+    }
+}
+
+// ---- Chocolatey (all packages; needs admin) ----
+async fn choco(ctx: &Ctx) {
+    ctx.rep.set(Status::Running, "choco upgrade all…", 30);
+    let res = run_cmd(
+        "choco",
+        &["upgrade", "all", "-y", "--no-progress"],
+        Duration::from_secs(2400),
+    )
+    .await;
+    match res.code {
+        Some(0) => ctx.rep.set(Status::Success, "Chocolatey packages upgraded", 100),
+        Some(1641) | Some(3010) => {
+            ctx.rep.set(Status::Warning, "Upgraded — reboot pending", 60);
+            ctx.rep.request_reboot();
+        }
+        c => ctx.rep.set(Status::Warning, &format!("Exit: {c:?}"), 50),
+    }
+}
+
+// ---- Scoop (user-level) ----
+async fn scoop(ctx: &Ctx) {
+    ctx.rep.set(Status::Running, "Updating Scoop + buckets…", 30);
+    run_cmd("scoop", &["update"], Duration::from_secs(600)).await;
+    if ctx.cancelled() {
+        return;
+    }
+    ctx.rep.set(Status::Running, "scoop update *…", 70);
+    let res = run_cmd("scoop", &["update", "*"], Duration::from_secs(2400)).await;
+    match res.code {
+        Some(0) => ctx.rep.set(Status::Success, "Scoop apps updated", 100),
+        c => ctx.rep.set(Status::Warning, &format!("Exit: {c:?}"), 50),
+    }
+}
+
+// ---- WSL (kernel/components) ----
+async fn wsl(ctx: &Ctx) {
+    ctx.rep.set(Status::Running, "wsl --update…", 40);
+    let res = run_cmd("wsl", &["--update"], Duration::from_secs(900)).await;
+    match res.code {
+        Some(0) => ctx.rep.set(Status::Success, "WSL up to date", 100),
+        c => ctx.rep.set(Status::Warning, &format!("Exit: {c:?}"), 50),
     }
 }
 

@@ -77,6 +77,15 @@ export default function App() {
     checkAppUpdate(false);
   }, [checkAppUpdate]);
 
+  // tray "Run all updates" → trigger a full run
+  useEffect(() => {
+    const p = api.onTrayRunAll(() => run("All"));
+    return () => {
+      p.then((u) => u());
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     api.getSystemInfo().then(setSys).catch(console.error);
     api.getConfig().then(setConfig).catch(console.error);

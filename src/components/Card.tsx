@@ -11,7 +11,11 @@ const COLOR: Record<Status, string> = {
 
 const ICON: Record<string, string> = {
   "windows-update": "🪟",
+  defender: "🛡️",
   winget: "📦",
+  choco: "🍫",
+  scoop: "🥄",
+  wsl: "🐧",
   office: "📊",
   antigravity: "🌐",
   dell: "💻",

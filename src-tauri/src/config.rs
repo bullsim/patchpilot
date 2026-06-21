@@ -7,8 +7,12 @@ use std::collections::BTreeMap;
 #[cfg(windows)]
 pub const COMPONENT_NAMES: &[&str] = &[
     "Windows Update",
+    "Windows Defender",
     "Microsoft Store",
     "Winget Packages",
+    "Chocolatey",
+    "Scoop",
+    "WSL",
     "Microsoft Office",
     "Dell Stack",
     "Surface Stack",
