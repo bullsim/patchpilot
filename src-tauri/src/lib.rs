@@ -157,6 +157,7 @@ async fn start_run(mode: RunMode, app: AppHandle, state: State<'_, AppState>) ->
 
     tauri::async_runtime::spawn(async move {
         let summary = orchestrator::run_all(mode, sys.clone(), cfg, reporter, cancel).await;
+        record_history(&summary);
         report_status(&report_url, &sys, &summary).await;
         running.store(false, Ordering::SeqCst);
     });
@@ -182,6 +183,7 @@ async fn run_one(id: String, app: AppHandle, state: State<'_, AppState>) -> Resu
 
     tauri::async_runtime::spawn(async move {
         let summary = orchestrator::run_one(&id, sys.clone(), cfg, reporter, cancel).await;
+        record_history(&summary);
         report_status(&report_url, &sys, &summary).await;
         running.store(false, Ordering::SeqCst);
     });
@@ -285,6 +287,42 @@ async fn report_status(report_url: &str, sys: &SystemInfo, summary: &model::RunS
     .await;
 }
 
+// ---------------- run history ----------------
+
+fn record_history(summary: &model::RunSummary) {
+    let path = paths::app_dir().join("history.json");
+    let mut list: Vec<serde_json::Value> = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default();
+    list.insert(
+        0,
+        serde_json::json!({
+            "timestamp": chrono::Local::now().to_rfc3339(),
+            "hostname": hostname(),
+            "mode": summary.mode,
+            "ok": summary.ok,
+            "warn": summary.warn,
+            "fail": summary.fail,
+            "skip": summary.skip,
+            "durationSecs": summary.duration_secs,
+            "rebootRequired": summary.reboot_required,
+        }),
+    );
+    list.truncate(50);
+    if let Ok(txt) = serde_json::to_string_pretty(&list) {
+        let _ = std::fs::write(&path, txt);
+    }
+}
+
+#[tauri::command]
+fn get_history() -> Vec<serde_json::Value> {
+    std::fs::read_to_string(paths::app_dir().join("history.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
 // ---------------- elevation (Windows) ----------------
 
 /// Reliable admin check via the Windows token (IsInRole).
@@ -356,6 +394,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(AppState {
             cancel: Arc::new(AtomicBool::new(false)),
             running: Arc::new(AtomicBool::new(false)),
@@ -375,6 +414,7 @@ pub fn run() {
             get_pending_reboot,
             is_admin,
             relaunch_elevated,
+            get_history,
         ])
         .run(tauri::generate_context!())
         .expect("error while running PatchPilot");
@@ -393,9 +433,15 @@ pub fn run_silent(args: &[String]) {
         let sys = Arc::new(system_info::detect().await);
         let cfg = config::load();
         let report_url = cfg.report_url.clone();
+        let auto_reboot = cfg.auto_reboot;
         let reporter: Arc<dyn Reporter> = Arc::new(CliReporter { log: FileLog::new() });
         let cancel = Arc::new(AtomicBool::new(false));
         let summary = orchestrator::run_all(mode, sys.clone(), cfg, reporter, cancel).await;
+        record_history(&summary);
         report_status(&report_url, &sys, &summary).await;
+        // Unattended firmware updates that need a reboot: restart so they finish.
+        if summary.reboot_required && auto_reboot {
+            let _ = reboot::schedule("now").await;
+        }
     });
 }

@@ -3,6 +3,7 @@ import { Card } from "./components/Card";
 import { ProgressRing } from "./components/ProgressRing";
 import { RebootBanner } from "./components/RebootBanner";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { HistoryPanel } from "./components/HistoryPanel";
 import * as api from "./lib/api";
 import type {
   AppConfig,
@@ -25,6 +26,7 @@ export default function App() {
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [isAdmin, setIsAdmin] = useState(true);
 
   const [rebootCountdown, setRebootCountdown] = useState<number | null>(null);
@@ -104,6 +106,10 @@ export default function App() {
       api.onRunFinished((s) => {
         setSummary(s);
         setRunning(false);
+        api.notify(
+          "PatchPilot — run complete",
+          `✓${s.ok}  ⚠${s.warn}  ✗${s.fail}${s.rebootRequired ? "  ·  restart pending" : ""}`
+        );
         if (s.rebootRequired && !rebootScheduled) {
           rebootDeadline.current = Date.now() + REBOOT_DECISION_SECS * 1000;
           setRebootCountdown(REBOOT_DECISION_SECS);
@@ -249,6 +255,9 @@ export default function App() {
             ))}
           </div>
           <UpdatePill state={upd} version={updVer} onClick={upd === "available" ? installAppUpdate : () => checkAppUpdate(true)} />
+          <button type="button" className="icon-btn" title="Run history" onClick={() => setShowHistory(true)}>
+            📜
+          </button>
           <button type="button" className="icon-btn" title="Open latest log" onClick={() => api.openLatestLog()}>
             📄
           </button>
@@ -339,6 +348,8 @@ export default function App() {
         <span>{running ? "Running… live status updates below" : "Ready"}</span>
         <span>{sys ? sys.gpus : ""}</span>
       </footer>
+
+      {showHistory && <HistoryPanel onClose={() => setShowHistory(false)} />}
 
       {showSettings && config && (
         <SettingsPanel

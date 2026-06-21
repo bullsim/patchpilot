@@ -3,5 +3,10 @@
   "identifier": "default",
   "description": "Core permissions for PatchPilot",
   "windows": ["main"],
-  "permissions": ["core:default", "updater:default", "process:default"]
+  "permissions": [
+    "core:default",
+    "updater:default",
+    "process:default",
+    "notification:default"
+  ]
 }

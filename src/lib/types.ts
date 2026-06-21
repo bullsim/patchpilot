@@ -45,12 +45,25 @@ export interface RunSummary {
   rebootRequired: boolean;
 }
 
+export interface HistoryEntry {
+  timestamp: string;
+  hostname: string;
+  mode: RunMode;
+  ok: number;
+  warn: number;
+  fail: number;
+  skip: number;
+  durationSecs: number;
+  rebootRequired: boolean;
+}
+
 export interface AppConfig {
   scheduledRunMode: RunMode;
   teamsWebhook: string;
   reportUrl: string;
   scheduleEnabled: boolean;
   scheduleTime: string;
+  autoReboot: boolean;
   haUrl: string;
   haToken: string;
   components: Record<string, boolean>;

@@ -2,6 +2,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import {
+  isPermissionGranted,
+  requestPermission,
+  sendNotification,
+} from "@tauri-apps/plugin-notification";
+import type { HistoryEntry } from "./types";
 import type {
   AppConfig,
   ComponentStatus,
@@ -57,3 +63,16 @@ export type { Update };
 export const checkForAppUpdate = (): Promise<Update | null> => check();
 
 export const relaunchApp = (): Promise<void> => relaunch();
+
+export const getHistory = () => invoke<HistoryEntry[]>("get_history");
+
+/** Show a native desktop notification (requests permission if needed). */
+export async function notify(title: string, body: string): Promise<void> {
+  try {
+    let granted = await isPermissionGranted();
+    if (!granted) granted = (await requestPermission()) === "granted";
+    if (granted) sendNotification({ title, body });
+  } catch (e) {
+    console.error(e);
+  }
+}

@@ -43,6 +43,9 @@ pub struct AppConfig {
     pub schedule_enabled: bool,
     #[serde(default = "default_schedule_time")]
     pub schedule_time: String,
+    /// Auto-restart after an unattended run that needs a reboot (firmware).
+    #[serde(default = "default_true")]
+    pub auto_reboot: bool,
     /// Home Assistant base URL (e.g. http://homeassistant.local:8123); empty disables it.
     #[serde(default)]
     pub ha_url: String,
@@ -66,6 +69,10 @@ fn default_schedule_time() -> String {
     "03:00".to_string()
 }
 
+fn default_true() -> bool {
+    true
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         let mut components = BTreeMap::new();
@@ -78,6 +85,7 @@ impl Default for AppConfig {
             report_url: default_report_url(),
             schedule_enabled: false,
             schedule_time: default_schedule_time(),
+            auto_reboot: true,
             ha_url: String::new(),
             ha_token: String::new(),
             components,

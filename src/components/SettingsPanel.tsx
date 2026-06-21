@@ -55,6 +55,15 @@ export function SettingsPanel({ config, onSave, onClose }: Props) {
           </label>
         </div>
 
+        <label className="toggle toggle-spaced">
+          <input
+            type="checkbox"
+            checked={draft.autoReboot}
+            onChange={(e) => setDraft((d) => ({ ...d, autoReboot: e.target.checked }))}
+          />
+          <span>Auto-restart after unattended firmware updates</span>
+        </label>
+
         <label className="field">
           <span>Teams webhook (optional)</span>
           <input

@@ -593,6 +593,19 @@ body {
 .toggle-spaced { margin-bottom: 12px; }
 .field-row { display: flex; gap: 12px; }
 .field-row .field { flex: 1; }
+
+.history-list { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
+.history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.history-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.history-counts { display: flex; gap: 10px; font-weight: 650; font-size: 13px; }
 .modal-actions {
   display: flex;
   justify-content: flex-end;
