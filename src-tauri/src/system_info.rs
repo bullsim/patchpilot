@@ -62,7 +62,12 @@ async fn tool_exists(tool: &str) -> bool {
 }
 
 async fn detect_dev_tools(info: &mut SystemInfo) {
-    let (rustup, dotnet) = tokio::join!(tool_exists("rustup"), tool_exists("dotnet"));
+    // .NET tools need an SDK (runtime-only machines can't manage tools), so check for one.
+    let dotnet_sdk = async {
+        let r = run_cmd("dotnet", &["--list-sdks"], Duration::from_secs(15)).await;
+        r.code == Some(0) && !r.stdout.trim().is_empty()
+    };
+    let (rustup, dotnet) = tokio::join!(tool_exists("rustup"), dotnet_sdk);
     info.has_rustup = rustup;
     info.has_dotnet = dotnet;
 }
