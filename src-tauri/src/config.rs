@@ -22,15 +22,30 @@ pub const COMPONENT_NAMES: &[&str] = &[
     "Logitech Stack",
     "Crucial Stack",
     "Home Assistant",
+    "Rust (rustup)",
+    ".NET tools",
 ];
 
 #[cfg(target_os = "macos")]
-pub const COMPONENT_NAMES: &[&str] =
-    &["macOS Software Update", "Homebrew", "Mac App Store", "Home Assistant"];
+pub const COMPONENT_NAMES: &[&str] = &[
+    "macOS Software Update",
+    "Homebrew",
+    "Mac App Store",
+    "Home Assistant",
+    "Rust (rustup)",
+    ".NET tools",
+];
 
 #[cfg(target_os = "linux")]
-pub const COMPONENT_NAMES: &[&str] =
-    &["APT Packages", "Flatpak", "Snap", "Firmware (fwupd)", "Home Assistant"];
+pub const COMPONENT_NAMES: &[&str] = &[
+    "APT Packages",
+    "Flatpak",
+    "Snap",
+    "Firmware (fwupd)",
+    "Home Assistant",
+    "Rust (rustup)",
+    ".NET tools",
+];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

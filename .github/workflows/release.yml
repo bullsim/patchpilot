@@ -23,8 +23,12 @@ jobs:
             args: ""
           - platform: ubuntu-24.04-arm        # Linux ARM64 (Raspberry Pi 64-bit, ARM servers)
             args: ""
+          - platform: windows-11-arm          # Windows on ARM (best-effort)
+            args: ""
+            experimental: true
 
     runs-on: ${{ matrix.platform }}
+    continue-on-error: ${{ matrix.experimental || false }}
     steps:
       - uses: actions/checkout@v4
 

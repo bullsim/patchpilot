@@ -53,8 +53,25 @@ async fn cached_sys(state: &State<'_, AppState>) -> Arc<SystemInfo> {
 
 struct FileLog(Mutex<std::fs::File>);
 
+/// Delete run logs older than 7 days.
+fn rotate_logs() {
+    let cutoff = std::time::SystemTime::now() - std::time::Duration::from_secs(7 * 24 * 3600);
+    if let Ok(rd) = std::fs::read_dir(paths::logs_dir()) {
+        for e in rd.flatten() {
+            if e.path().extension().map(|x| x == "log").unwrap_or(false) {
+                if let Ok(modified) = e.metadata().and_then(|m| m.modified()) {
+                    if modified < cutoff {
+                        let _ = std::fs::remove_file(e.path());
+                    }
+                }
+            }
+        }
+    }
+}
+
 impl FileLog {
     fn new() -> Arc<Self> {
+        rotate_logs();
         let ts = chrono::Local::now().format("%Y%m%d_%H%M%S");
         let path = paths::logs_dir().join(format!("run_{ts}.log"));
         let file = std::fs::OpenOptions::new()
@@ -131,6 +148,35 @@ async fn save_config(config: AppConfig) -> Result<(), String> {
         config.scheduled_run_mode.as_str(),
     )
     .await
+}
+
+fn portable_config_path() -> std::path::PathBuf {
+    let home = std::env::var("USERPROFILE")
+        .or_else(|_| std::env::var("HOME"))
+        .unwrap_or_else(|_| ".".into());
+    std::path::PathBuf::from(home).join("patchpilot-config.json")
+}
+
+/// Export the current config to ~/patchpilot-config.json for copying to other machines.
+#[tauri::command]
+fn export_config() -> Result<String, String> {
+    let cfg = config::load();
+    let path = portable_config_path();
+    let txt = serde_json::to_string_pretty(&cfg).map_err(|e| e.to_string())?;
+    std::fs::write(&path, txt).map_err(|e| e.to_string())?;
+    Ok(path.display().to_string())
+}
+
+/// Import config from ~/patchpilot-config.json (applies + re-arms the schedule).
+#[tauri::command]
+async fn import_config() -> Result<AppConfig, String> {
+    let path = portable_config_path();
+    let txt = std::fs::read_to_string(&path)
+        .map_err(|_| format!("No config found at {}", path.display()))?;
+    let cfg: AppConfig = serde_json::from_str(&txt).map_err(|e| e.to_string())?;
+    config::save(&cfg).map_err(|e| e.to_string())?;
+    schedule::apply(cfg.schedule_enabled, &cfg.schedule_time, cfg.scheduled_run_mode.as_str()).await?;
+    Ok(cfg)
 }
 
 #[tauri::command]
@@ -465,6 +511,8 @@ pub fn run() {
             is_admin,
             relaunch_elevated,
             get_history,
+            export_config,
+            import_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running PatchPilot");

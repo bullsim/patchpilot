@@ -118,7 +118,7 @@ pub async fn run_one(
     cancel: Arc<AtomicBool>,
 ) -> RunSummary {
     let comps: Vec<crate::registry::ComponentMeta> =
-        crate::registry::registry().into_iter().filter(|m| m.id == id).collect();
+        crate::registry::find(id).into_iter().collect();
     run_list(RunMode::All, comps, sys, cfg, reporter, cancel).await
 }
 

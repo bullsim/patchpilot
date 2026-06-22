@@ -43,26 +43,53 @@ async fn winget_upgrade(id: &str, secs: u64) -> CmdResult {
     run_cmd("winget", &args, Duration::from_secs(secs)).await
 }
 
-// ---- 1. Windows Update ----
+// ---- 1. Windows Update (COM API — actually downloads + installs + reports) ----
+const WU_PS: &str = r#"
+try {
+  $session  = New-Object -ComObject Microsoft.Update.Session
+  $searcher = $session.CreateUpdateSearcher()
+  $result   = $searcher.Search("IsInstalled=0 and IsHidden=0")
+  if ($result.Updates.Count -eq 0) { Write-Output 'RESULT:none'; exit 0 }
+  $coll = New-Object -ComObject Microsoft.Update.UpdateColl
+  foreach ($u in $result.Updates) { try { $u.AcceptEula() } catch {}; $coll.Add($u) | Out-Null }
+  $dl = $session.CreateUpdateDownloader(); $dl.Updates = $coll; $dl.Download() | Out-Null
+  $inst = $session.CreateUpdateInstaller(); $inst.Updates = $coll
+  $r = $inst.Install()
+  Write-Output "RESULT:$($r.ResultCode):$($coll.Count):$($r.RebootRequired)"
+} catch { Write-Output "ERROR:$($_.Exception.Message)" }
+"#;
+
 async fn windows_update(ctx: &Ctx) {
-    ctx.rep.set(Status::Running, "Initiating scan…", 10);
-    let uso = format!(
-        "{}\\System32\\UsoClient.exe",
-        std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".into())
-    );
-    if !Path::new(&uso).exists() {
-        ctx.rep.set(Status::Warning, "UsoClient.exe not found", 0);
-        return;
-    }
-    for (i, action) in ["StartScan", "StartDownload", "StartInstall"].iter().enumerate() {
-        if ctx.cancelled() {
-            return;
+    ctx.rep.set(Status::Running, "Searching + installing Windows updates…", 20);
+    let res = run_cmd(
+        "powershell",
+        &["-NoProfile", "-NonInteractive", "-Command", WU_PS],
+        Duration::from_secs(3600),
+    )
+    .await;
+    let out = res.combined();
+    let line = out.lines().map(str::trim).find(|l| l.starts_with("RESULT:") || l.starts_with("ERROR:"));
+    match line {
+        Some("RESULT:none") => ctx.rep.set(Status::Success, "Already up to date", 100),
+        Some(l) if l.starts_with("RESULT:") => {
+            let p: Vec<&str> = l.trim_start_matches("RESULT:").split(':').collect();
+            let code = p.first().copied().unwrap_or("");
+            let count = p.get(1).copied().unwrap_or("?");
+            let reboot = p.get(2).map(|s| s.eq_ignore_ascii_case("true")).unwrap_or(false);
+            // ResultCode 2 = Succeeded, 3 = Succeeded with errors.
+            if code == "2" || code == "3" {
+                if reboot {
+                    ctx.rep.set(Status::Warning, &format!("{count} update(s) installed — reboot required"), 60);
+                    ctx.rep.request_reboot();
+                } else {
+                    ctx.rep.set(Status::Success, &format!("{count} update(s) installed"), 100);
+                }
+            } else {
+                ctx.rep.set(Status::Warning, &format!("Install result code {code}"), 50);
+            }
         }
-        run_cmd(&uso, &[action], Duration::from_secs(30)).await;
-        ctx.rep.set(Status::Running, &format!("USOClient: {action}"), 30 + (i as i32) * 25);
-        sleep(Duration::from_secs(2)).await;
+        _ => ctx.rep.set(Status::Warning, "Windows Update failed (needs admin)", 50),
     }
-    ctx.rep.set(Status::Success, "Scan/Download/Install initiated", 100);
 }
 
 // ---- Microsoft Store (trigger update scan for all Store apps) ----
@@ -155,7 +182,9 @@ async fn wsl(ctx: &Ctx) {
 
 // ---- 2. Winget (all packages) ----
 async fn winget_all(ctx: &Ctx) {
-    ctx.rep.set(Status::Running, "Upgrading all packages…", 10);
+    ctx.rep.set(Status::Running, "Refreshing winget sources…", 8);
+    run_cmd("winget", &["source", "update"], Duration::from_secs(120)).await;
+    ctx.rep.set(Status::Running, "Upgrading all packages…", 15);
     let mut args = vec!["upgrade", "--all", "--include-unknown"];
     args.extend_from_slice(WINGET_FLAGS);
     let res = run_cmd("winget", &args, Duration::from_secs(1800)).await;

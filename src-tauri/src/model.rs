@@ -47,6 +47,26 @@ impl RunMode {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn run_mode_roundtrip() {
+        assert_eq!(RunMode::from_str("software").as_str(), "Software");
+        assert_eq!(RunMode::from_str("FIRMWARE").as_str(), "Firmware");
+        assert_eq!(RunMode::from_str("anything").as_str(), "All");
+    }
+
+    #[test]
+    fn mode_includes_categories() {
+        assert!(RunMode::All.includes(Category::Firmware));
+        assert!(RunMode::Software.includes(Category::Software));
+        assert!(!RunMode::Software.includes(Category::Firmware));
+        assert!(!RunMode::Firmware.includes(Category::Software));
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ComponentStatus {

@@ -4,6 +4,7 @@
 use crate::orchestrator::Ctx;
 
 mod homeassistant;
+mod devtools;
 #[cfg(windows)]
 mod windows;
 #[cfg(target_os = "macos")]
@@ -15,6 +16,9 @@ pub async fn run(id: &str, ctx: &Ctx) {
     // Cross-platform components first.
     if id == "homeassistant" {
         return homeassistant::run(ctx).await;
+    }
+    if matches!(id, "rustup" | "dotnet-tools") {
+        return devtools::run(id, ctx).await;
     }
     #[cfg(windows)]
     windows::run(id, ctx).await;

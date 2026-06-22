@@ -1,4 +1,5 @@
 import { useState } from "react";
+import * as api from "../lib/api";
 import type { AppConfig, RunMode } from "../lib/types";
 
 interface Props {
@@ -108,6 +109,34 @@ export function SettingsPanel({ config, onSave, onClose }: Props) {
                 <span>{name}</span>
               </label>
             ))}
+        </div>
+
+        <div className="field-label">Sync across machines</div>
+        <div className="field-row">
+          <button
+            type="button"
+            className="mode-btn"
+            onClick={async () => {
+              const path = await api.exportConfig().catch(() => null);
+              alert(path ? `Exported to:\n${path}\n\nCopy that file to another machine's home folder, then Import there.` : "Export failed");
+            }}
+          >
+            ⬆ Export config
+          </button>
+          <button
+            type="button"
+            className="mode-btn"
+            onClick={async () => {
+              try {
+                const imported = await api.importConfig();
+                onSave(imported);
+              } catch (e) {
+                alert(String(e));
+              }
+            }}
+          >
+            ⬇ Import config
+          </button>
         </div>
 
         <div className="modal-actions">

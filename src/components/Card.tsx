@@ -26,6 +26,8 @@ const ICON: Record<string, string> = {
   logitech: "🖱️",
   crucial: "💾",
   homeassistant: "🏠",
+  rustup: "🦀",
+  "dotnet-tools": "🟣",
   // macOS
   "macos-update": "🍎",
   brew: "🍺",

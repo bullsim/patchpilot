@@ -28,6 +28,9 @@ pub struct SystemInfo {
     pub has_flatpak: bool,
     pub has_snap: bool,
     pub has_fwupd: bool,
+    // Cross-platform dev tools
+    pub has_rustup: bool,
+    pub has_dotnet: bool,
 }
 
 pub async fn detect() -> SystemInfo {
@@ -38,8 +41,30 @@ pub async fn detect() -> SystemInfo {
     detect_macos(&mut info).await;
     #[cfg(target_os = "linux")]
     detect_linux(&mut info).await;
+    detect_dev_tools(&mut info).await;
     save_cache(&info);
     info
+}
+
+/// Cross-platform CLI presence check.
+async fn tool_exists(tool: &str) -> bool {
+    #[cfg(windows)]
+    {
+        run_cmd("where", &[tool], Duration::from_secs(15)).await.code == Some(0)
+    }
+    #[cfg(not(windows))]
+    {
+        run_cmd("sh", &["-c", &format!("command -v {tool}")], Duration::from_secs(10))
+            .await
+            .code
+            == Some(0)
+    }
+}
+
+async fn detect_dev_tools(info: &mut SystemInfo) {
+    let (rustup, dotnet) = tokio::join!(tool_exists("rustup"), tool_exists("dotnet"));
+    info.has_rustup = rustup;
+    info.has_dotnet = dotnet;
 }
 
 /// Last detection result, for instant first paint (refreshed in the background).

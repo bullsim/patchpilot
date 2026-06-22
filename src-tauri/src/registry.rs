@@ -62,10 +62,25 @@ pub fn registry() -> Vec<ComponentMeta> {
     ]
 }
 
+/// Components that work on any OS (gated on the tool being installed).
+fn cross_platform() -> Vec<ComponentMeta> {
+    use Category::Software;
+    vec![
+        ComponentMeta { id: "rustup",       name: "Rust (rustup)", category: Software, applies: |s| s.has_rustup },
+        ComponentMeta { id: "dotnet-tools", name: ".NET tools",    category: Software, applies: |s| s.has_dotnet },
+    ]
+}
+
+/// Look up a single component by id (across OS + cross-platform sets).
+pub fn find(id: &str) -> Option<ComponentMeta> {
+    registry().into_iter().chain(cross_platform()).find(|m| m.id == id)
+}
+
 /// Components that should run for this machine + mode + config.
 pub fn selection(mode: RunMode, sys: &SystemInfo, cfg: &AppConfig) -> Vec<ComponentMeta> {
     registry()
         .into_iter()
+        .chain(cross_platform())
         .filter(|m| mode.includes(m.category))
         .filter(|m| (m.applies)(sys))
         .filter(|m| cfg.enabled(m.name))

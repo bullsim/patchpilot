@@ -69,6 +69,9 @@ export const relaunchApp = (): Promise<void> => relaunch();
 
 export const getHistory = () => invoke<HistoryEntry[]>("get_history");
 
+export const exportConfig = () => invoke<string>("export_config");
+export const importConfig = () => invoke<AppConfig>("import_config");
+
 /** Show a native desktop notification (requests permission if needed). */
 export async function notify(title: string, body: string): Promise<void> {
   try {

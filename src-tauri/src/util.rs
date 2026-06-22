@@ -83,6 +83,28 @@ pub fn is_winget_ok(code: Option<i32>) -> bool {
     matches!(code, Some(0) | Some(-1978335189) | Some(-1978335212) | Some(-1978335188))
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn winget_codes_map_to_success() {
+        assert!(matches!(winget_result(Some(0), "x").0, Status::Success));
+        assert!(matches!(winget_result(Some(-1978335189), "x").0, Status::Success));
+        assert!(matches!(winget_result(Some(-1978335212), "x").0, Status::Success));
+        assert!(matches!(winget_result(Some(5), "x").0, Status::Warning));
+        assert!(matches!(winget_result(None, "x").0, Status::Warning));
+    }
+
+    #[test]
+    fn ok_codes() {
+        assert!(is_winget_ok(Some(0)));
+        assert!(is_winget_ok(Some(-1978335189)));
+        assert!(!is_winget_ok(Some(1)));
+        assert!(!is_winget_ok(None));
+    }
+}
+
 /// Kill processes by image name (best effort), e.g. for orphan cleanup.
 pub async fn kill_processes(names: &[&str]) {
     for n in names {
