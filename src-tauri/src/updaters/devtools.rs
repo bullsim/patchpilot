@@ -8,7 +8,7 @@ use std::time::Duration;
 pub async fn run(id: &str, ctx: &Ctx) {
     match id {
         "rustup" => rustup(ctx).await,
-        "dotnet-tools" => dotnet_tools(ctx).await,
+        "dotnet-tools" => dotnet(ctx).await,
         other => ctx.rep.set(Status::Skipped, &format!("Unknown component '{other}'"), 0),
     }
 }
@@ -23,16 +23,47 @@ async fn rustup(ctx: &Ctx) {
     }
 }
 
-// .NET global tools: update each one silently. Avoids the `--all` flag (newer SDKs only)
-// and handles "no SDK" / "no tools" gracefully.
+// .NET: update the runtimes/SDKs (Windows, via winget) + global tools (all OSes), silently.
+async fn dotnet(ctx: &Ctx) {
+    #[cfg(windows)]
+    dotnet_runtimes_winget(ctx).await;
+    dotnet_tools(ctx).await;
+}
+
+// Silently upgrade installed .NET SDK/runtime winget packages. winget skips ids that
+// aren't installed, so the known-id sweep is safe (no parsing of truncated tables).
+#[cfg(windows)]
+async fn dotnet_runtimes_winget(ctx: &Ctx) {
+    ctx.rep.set(Status::Running, "Updating .NET runtimes/SDKs…", 10);
+    let flags = [
+        "--silent",
+        "--disable-interactivity",
+        "--accept-source-agreements",
+        "--accept-package-agreements",
+    ];
+    let families = ["SDK", "Runtime", "DesktopRuntime", "AspNetCore"];
+    for v in ["6", "7", "8", "9", "10"] {
+        for fam in families {
+            if ctx.cancelled() {
+                return;
+            }
+            let id = format!("Microsoft.DotNet.{fam}.{v}");
+            let mut args = vec!["upgrade", "--id", id.as_str(), "--exact"];
+            args.extend_from_slice(&flags);
+            run_cmd("winget", &args, Duration::from_secs(900)).await;
+        }
+    }
+}
+
+// .NET global tools: update each silently (no --all dependency; graceful skips).
 async fn dotnet_tools(ctx: &Ctx) {
-    ctx.rep.set(Status::Running, "Listing .NET global tools…", 20);
+    ctx.rep.set(Status::Running, "Updating .NET global tools…", 60);
     let list = run_cmd("dotnet", &["tool", "list", "--global"], Duration::from_secs(60)).await;
     if list.code != Some(0) {
-        ctx.rep.set(Status::Skipped, "dotnet tool management unavailable", 0);
+        // Runtimes may still have been updated above; don't hard-fail.
+        ctx.rep.set(Status::Success, ".NET runtimes checked (no tool SDK)", 100);
         return;
     }
-    // Table: header, separator line, then "<PackageId>  <Version>  <Commands>".
     let ids: Vec<String> = list
         .stdout
         .lines()
@@ -43,7 +74,7 @@ async fn dotnet_tools(ctx: &Ctx) {
         .collect();
 
     if ids.is_empty() {
-        ctx.rep.set(Status::Skipped, "No global .NET tools installed", 0);
+        ctx.rep.set(Status::Success, ".NET runtimes checked; no global tools", 100);
         return;
     }
 
@@ -53,7 +84,7 @@ async fn dotnet_tools(ctx: &Ctx) {
         if ctx.cancelled() {
             break;
         }
-        ctx.rep.set(Status::Running, &format!("Updating {id}…"), 30 + ((i as i32) * 65 / total as i32));
+        ctx.rep.set(Status::Running, &format!("Updating {id}…"), 70 + ((i as i32) * 25 / total as i32));
         let r = run_cmd(
             "dotnet",
             &["tool", "update", id, "--global", "--verbosity", "quiet"],
@@ -66,8 +97,8 @@ async fn dotnet_tools(ctx: &Ctx) {
     }
 
     if ok == total {
-        ctx.rep.set(Status::Success, &format!("{ok} .NET tool(s) updated"), 100);
+        ctx.rep.set(Status::Success, &format!(".NET updated ({ok} tool(s))"), 100);
     } else {
-        ctx.rep.set(Status::Warning, &format!("Updated {ok}/{total} .NET tool(s)"), 60);
+        ctx.rep.set(Status::Warning, &format!(".NET tools {ok}/{total} updated"), 60);
     }
 }

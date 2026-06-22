@@ -23,7 +23,7 @@ pub const COMPONENT_NAMES: &[&str] = &[
     "Crucial Stack",
     "Home Assistant",
     "Rust (rustup)",
-    ".NET tools",
+    ".NET",
 ];
 
 #[cfg(target_os = "macos")]
@@ -33,7 +33,7 @@ pub const COMPONENT_NAMES: &[&str] = &[
     "Mac App Store",
     "Home Assistant",
     "Rust (rustup)",
-    ".NET tools",
+    ".NET",
 ];
 
 #[cfg(target_os = "linux")]
@@ -44,7 +44,7 @@ pub const COMPONENT_NAMES: &[&str] = &[
     "Firmware (fwupd)",
     "Home Assistant",
     "Rust (rustup)",
-    ".NET tools",
+    ".NET",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
