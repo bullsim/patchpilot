@@ -71,6 +71,9 @@ pub struct AppConfig {
     /// Home Assistant long-lived access token.
     #[serde(default)]
     pub ha_token: String,
+    /// winget package ids to skip during "upgrade --all" (pinned).
+    #[serde(default)]
+    pub winget_excludes: Vec<String>,
     #[serde(default)]
     pub components: BTreeMap<String, bool>,
 }
@@ -107,6 +110,7 @@ impl Default for AppConfig {
             auto_reboot: true,
             ha_url: String::new(),
             ha_token: String::new(),
+            winget_excludes: Vec::new(),
             components,
         }
     }

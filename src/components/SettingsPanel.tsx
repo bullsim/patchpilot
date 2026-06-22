@@ -95,6 +95,24 @@ export function SettingsPanel({ config, onSave, onClose }: Props) {
           />
         </label>
 
+        <label className="field">
+          <span>Skip these winget packages (one id per line)</span>
+          <textarea
+            rows={3}
+            value={(draft.wingetExcludes ?? []).join("\n")}
+            placeholder={"Google.Chrome\nValve.Steam"}
+            onChange={(e) =>
+              setDraft((d) => ({
+                ...d,
+                wingetExcludes: e.target.value
+                  .split("\n")
+                  .map((s) => s.trim())
+                  .filter(Boolean),
+              }))
+            }
+          />
+        </label>
+
         <div className="field-label">Components</div>
         <div className="toggles">
           {Object.keys(draft.components)

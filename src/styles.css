@@ -548,7 +548,8 @@ body {
   color: var(--muted);
 }
 .field input,
-.field select {
+.field select,
+.field textarea {
   padding: 10px 12px;
   border: 1px solid var(--border-strong);
   border-radius: 10px;
@@ -556,9 +557,12 @@ body {
   background: var(--surface);
   color: var(--text);
   outline: none;
+  font-family: inherit;
+  resize: vertical;
 }
 .field input:focus,
-.field select:focus {
+.field select:focus,
+.field textarea:focus {
   border-color: var(--blue);
 }
 .field select option {

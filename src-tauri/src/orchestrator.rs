@@ -74,6 +74,7 @@ pub struct Ctx {
     pub cancel: Arc<AtomicBool>,
     pub ha_url: String,
     pub ha_token: String,
+    pub winget_excludes: Vec<String>,
 }
 
 impl Ctx {
@@ -158,6 +159,7 @@ async fn run_list(
             cancel: cancel.clone(),
             ha_url: cfg.ha_url.clone(),
             ha_token: cfg.ha_token.clone(),
+            winget_excludes: cfg.winget_excludes.clone(),
         };
         updaters::run(meta.id, &ctx).await;
     }

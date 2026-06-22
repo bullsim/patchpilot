@@ -66,5 +66,6 @@ export interface AppConfig {
   autoReboot: boolean;
   haUrl: string;
   haToken: string;
+  wingetExcludes: string[];
   components: Record<string, boolean>;
 }

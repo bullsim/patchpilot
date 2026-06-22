@@ -140,7 +140,23 @@ fn get_config() -> Result<AppConfig, String> {
 
 #[tauri::command]
 async fn save_config(config: AppConfig) -> Result<(), String> {
+    let old = config::load();
     config::save(&config).map_err(|e| e.to_string())?;
+
+    // Unpin winget packages that were removed from the exclude list.
+    #[cfg(windows)]
+    for id in &old.winget_excludes {
+        let id = id.trim();
+        if !id.is_empty() && !config.winget_excludes.iter().any(|n| n.trim() == id) {
+            let _ = util::run_cmd(
+                "winget",
+                &["pin", "remove", "--id", id, "--exact"],
+                std::time::Duration::from_secs(30),
+            )
+            .await;
+        }
+    }
+
     // Keep the OS scheduled task in sync with the chosen schedule.
     schedule::apply(
         config.schedule_enabled,

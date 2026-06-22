@@ -184,6 +184,13 @@ async fn wsl(ctx: &Ctx) {
 async fn winget_all(ctx: &Ctx) {
     ctx.rep.set(Status::Running, "Refreshing winget sources…", 8);
     run_cmd("winget", &["source", "update"], Duration::from_secs(120)).await;
+    // Pin excluded packages so `upgrade --all` skips them.
+    for id in &ctx.winget_excludes {
+        let id = id.trim();
+        if !id.is_empty() {
+            run_cmd("winget", &["pin", "add", "--id", id, "--exact"], Duration::from_secs(30)).await;
+        }
+    }
     ctx.rep.set(Status::Running, "Upgrading all packages…", 15);
     let mut args = vec!["upgrade", "--all", "--include-unknown"];
     args.extend_from_slice(WINGET_FLAGS);
