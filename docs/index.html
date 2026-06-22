@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PatchPilot — keep all your machines up to date</title>
+<meta name="description" content="One slick app that keeps your Windows, macOS, Linux and Raspberry Pi machines current — winget, Store, brew, apt, firmware, Home Assistant — with a daily scheduler and self-update." />
+<style>
+  :root{
+    --bg0:#0a0f1c;--bg1:#0e1525;--text:#e8edf6;--muted:#97a3b8;--faint:#5e6b82;
+    --surface:rgba(255,255,255,.04);--border:rgba(255,255,255,.09);--border2:rgba(255,255,255,.16);
+    --blue:#3b82f6;--indigo:#6366f1;--green:#22c55e;
+    font-family:"Segoe UI",system-ui,-apple-system,sans-serif;color:var(--text);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;
+    background:
+      radial-gradient(1200px 700px at 80% -10%,rgba(99,102,241,.18),transparent 60%),
+      radial-gradient(900px 600px at -10% 10%,rgba(59,130,246,.14),transparent 55%),
+      linear-gradient(180deg,var(--bg1),var(--bg0));
+    background-attachment:fixed;}
+  .wrap{max-width:980px;margin:0 auto;padding:48px 24px 64px}
+  header{display:flex;align-items:center;gap:16px;margin-bottom:36px}
+  .logo{width:56px;height:56px;border-radius:14px;display:grid;place-items:center;font-size:30px;font-weight:800;color:#fff;
+    background:linear-gradient(135deg,var(--blue),var(--indigo));box-shadow:0 8px 22px rgba(59,130,246,.4)}
+  h1{font-size:30px;margin:0}
+  .tag{color:var(--muted);margin:2px 0 0}
+  .hero{font-size:19px;color:var(--muted);line-height:1.55;max-width:680px;margin:0 0 8px}
+  .ver{display:inline-block;margin:18px 0 10px;font-size:13px;color:var(--green);font-weight:650}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;margin:10px 0 36px}
+  a.dl{display:flex;flex-direction:column;gap:4px;text-decoration:none;color:var(--text);
+    background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;transition:.15s}
+  a.dl:hover{border-color:var(--blue);transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.35)}
+  a.dl .os{font-size:16px;font-weight:700}
+  a.dl .file{font-size:12px;color:var(--faint)}
+  a.dl.primary{background:linear-gradient(135deg,var(--blue),var(--indigo));border-color:transparent}
+  a.dl.primary .file{color:rgba(255,255,255,.8)}
+  h2{font-size:20px;margin:34px 0 14px}
+  .feat{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+  .feat div{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;font-size:14px;color:var(--muted)}
+  .feat b{color:var(--text)}
+  footer{margin-top:44px;color:var(--faint);font-size:13px;border-top:1px solid var(--border);padding-top:18px}
+  footer a{color:var(--blue)}
+  .note{font-size:13px;color:var(--faint);margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">P</div>
+    <div><h1>PatchPilot</h1><div class="tag">Keep every machine up to date — automatically.</div></div>
+  </header>
+
+  <p class="hero">One slick app that updates your whole fleet — Windows, macOS, Linux and Raspberry Pi.
+  It runs winget, Microsoft Store, Chocolatey, Scoop, WSL, brew, apt, flatpak, snap, firmware,
+  even Home Assistant — only updating what's already installed. Daily scheduler, system tray,
+  desktop notifications, and it updates itself.</p>
+
+  <div class="ver" id="ver">Loading latest release…</div>
+
+  <div class="grid" id="downloads">
+    <a class="dl primary" data-match="_x64-setup.exe" href="#"><span class="os">⬇ Windows (x64)</span><span class="file">setup .exe</span></a>
+    <a class="dl" data-match="_arm64-setup.exe" href="#"><span class="os">Windows (ARM64)</span><span class="file">setup .exe</span></a>
+    <a class="dl" data-match="_universal.dmg" href="#"><span class="os">macOS</span><span class="file">Intel + Apple Silicon · .dmg</span></a>
+    <a class="dl" data-match="_amd64.deb" href="#"><span class="os">Linux (x64)</span><span class="file">.deb — Zorin / Ubuntu / Debian</span></a>
+    <a class="dl" data-match="_amd64.AppImage" href="#"><span class="os">Linux (x64)</span><span class="file">.AppImage</span></a>
+    <a class="dl" data-match="_arm64.deb" href="#"><span class="os">Raspberry Pi (64-bit)</span><span class="file">.deb — ARM64</span></a>
+    <a class="dl" data-match="_aarch64.AppImage" href="#"><span class="os">Raspberry Pi (64-bit)</span><span class="file">.AppImage — ARM64</span></a>
+  </div>
+  <div class="note">Install once per machine — after that PatchPilot updates itself. Unsigned build:
+  on first launch choose “More info → Run anyway” (Windows) or right-click → Open (macOS).</div>
+
+  <h2>What it does</h2>
+  <div class="feat">
+    <div><b>Update-only.</b> Upgrades what's installed; never force-installs new software.</div>
+    <div><b>Per-machine detection.</b> Shows only the components that machine actually has.</div>
+    <div><b>Daily scheduler.</b> Runs headless via Task Scheduler / launchd / systemd, then auto-reboots if firmware needs it.</div>
+    <div><b>Home Assistant.</b> Updates Core / OS / add-ons via the HA API (no add-on needed).</div>
+    <div><b>System tray + notifications.</b> Run from the tray; get a toast when it's done.</div>
+    <div><b>Signed self-update.</b> Each release is cryptographically signed; machines pull it automatically.</div>
+  </div>
+
+  <footer>
+    Open source · <a id="repo" href="https://github.com/bullsim/patchpilot">github.com/bullsim/patchpilot</a>
+    · <a id="all" href="https://github.com/bullsim/patchpilot/releases">all releases</a>
+  </footer>
+</div>
+
+<script>
+const REPO = "bullsim/patchpilot";
+fetch(`https://api.github.com/repos/${REPO}/releases/latest`)
+  .then(r => r.json())
+  .then(rel => {
+    document.getElementById("ver").textContent = `Latest: ${rel.tag_name} · ${new Date(rel.published_at).toLocaleDateString()}`;
+    const assets = rel.assets || [];
+    document.querySelectorAll("a.dl").forEach(a => {
+      const m = a.getAttribute("data-match");
+      const asset = assets.find(x => x.name.endsWith(m) || x.name.includes(m));
+      if (asset) { a.href = asset.browser_download_url; }
+      else { a.style.opacity = .4; a.querySelector(".file").textContent = "not in this release"; }
+    });
+  })
+  .catch(() => {
+    document.getElementById("ver").textContent = "Couldn't load latest release — see all releases ↓";
+    document.querySelectorAll("a.dl").forEach(a => a.href = `https://github.com/${REPO}/releases/latest`);
+  });
+</script>
+</body>
+</html>
