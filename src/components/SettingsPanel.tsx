@@ -114,6 +114,32 @@ export function SettingsPanel({ config, onSave, onClose }: Props) {
         </label>
 
         <div className="field-label">Components</div>
+        <div className="field-row toggle-spaced">
+          <button
+            type="button"
+            className="mode-btn"
+            onClick={() =>
+              setDraft((d) => ({
+                ...d,
+                components: Object.fromEntries(Object.keys(d.components).map((k) => [k, true])),
+              }))
+            }
+          >
+            Enable all
+          </button>
+          <button
+            type="button"
+            className="mode-btn"
+            onClick={() =>
+              setDraft((d) => ({
+                ...d,
+                components: Object.fromEntries(Object.keys(d.components).map((k) => [k, false])),
+              }))
+            }
+          >
+            Disable all
+          </button>
+        </div>
         <div className="toggles">
           {Object.keys(draft.components)
             .sort()

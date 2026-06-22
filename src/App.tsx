@@ -77,9 +77,9 @@ export default function App() {
     checkAppUpdate(false);
   }, [checkAppUpdate]);
 
-  // tray "Run all updates" → trigger a full run
+  // tray run items → trigger a run in the chosen mode
   useEffect(() => {
-    const p = api.onTrayRunAll(() => run("All"));
+    const p = api.onTrayRun((m) => run(m));
     return () => {
       p.then((u) => u());
     };

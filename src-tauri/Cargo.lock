@@ -2462,7 +2462,7 @@ dependencies = [
 
 [[package]]
 name = "patchpilot"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "chrono",
  "serde",
@@ -2472,6 +2472,7 @@ dependencies = [
  "tauri-plugin-notification",
  "tauri-plugin-process",
  "tauri-plugin-updater",
+ "tauri-plugin-window-state",
  "tokio",
 ]
 
@@ -3779,6 +3780,21 @@ dependencies = [
  "url",
  "windows-sys 0.60.2",
  "zip",
+]
+
+[[package]]
+name = "tauri-plugin-window-state"
+version = "2.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73736611e14142408d15353e21e3cca2f12a3cfb523ad0ce85999b6d2ef1a704"
+dependencies = [
+ "bitflags 2.13.0",
+ "log",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

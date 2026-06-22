@@ -55,8 +55,8 @@ export const onRunFinished = (cb: (s: RunSummary) => void): Promise<UnlistenFn> 
 export const onLog = (cb: (line: string) => void): Promise<UnlistenFn> =>
   listen<string>("log-line", (e) => cb(e.payload));
 
-export const onTrayRunAll = (cb: () => void): Promise<UnlistenFn> =>
-  listen<void>("tray-run-all", () => cb());
+export const onTrayRun = (cb: (mode: RunMode) => void): Promise<UnlistenFn> =>
+  listen<RunMode>("tray-run", (e) => cb(e.payload));
 
 // ---- App self-update (Tauri updater) ----
 

@@ -468,6 +468,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .manage(AppState {
             cancel: Arc::new(AtomicBool::new(false)),
             running: Arc::new(AtomicBool::new(false)),
@@ -476,9 +477,11 @@ pub fn run() {
         .setup(|app| {
             // System tray: run/show/quit + click-to-show.
             let run_all = MenuItem::with_id(app, "run_all", "Run all updates", true, None::<&str>)?;
+            let run_sw = MenuItem::with_id(app, "run_software", "Run software only", true, None::<&str>)?;
+            let run_fw = MenuItem::with_id(app, "run_firmware", "Run firmware only", true, None::<&str>)?;
             let show = MenuItem::with_id(app, "show", "Show PatchPilot", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&run_all, &show, &quit])?;
+            let menu = Menu::with_items(app, &[&run_all, &run_sw, &run_fw, &show, &quit])?;
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
                 .tooltip("PatchPilot")
@@ -486,7 +489,15 @@ pub fn run() {
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "run_all" => {
                         show_main(app);
-                        let _ = app.emit("tray-run-all", ());
+                        let _ = app.emit("tray-run", "All");
+                    }
+                    "run_software" => {
+                        show_main(app);
+                        let _ = app.emit("tray-run", "Software");
+                    }
+                    "run_firmware" => {
+                        show_main(app);
+                        let _ = app.emit("tray-run", "Firmware");
                     }
                     "show" => show_main(app),
                     "quit" => app.exit(0),
