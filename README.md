@@ -22,7 +22,8 @@ What it updates (only what's already installed — see the principle below):
 
 Grab the latest build for each machine from the **Releases** page:
 
-### **https://github.com/bullsim/patchpilot/releases/latest**
+### Download site: **https://bullsim.github.io/patchpilot/**
+### Or grab files directly: **https://github.com/bullsim/patchpilot/releases/latest**
 
 | Machine | File to download |
 |---|---|
