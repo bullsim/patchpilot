@@ -610,6 +610,11 @@ body {
 }
 .history-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
 .history-counts { display: flex; gap: 10px; font-weight: 650; font-size: 13px; }
+
+.modal-wide { width: 760px; max-width: 92vw; }
+.modal-wide .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.fleet-counts { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 13px; margin-top: 8px; }
+.fleet-when { margin-left: auto; color: var(--faint); font-weight: 500; font-size: 11px; }
 .modal-actions {
   display: flex;
   justify-content: flex-end;

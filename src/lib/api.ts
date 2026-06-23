@@ -7,7 +7,7 @@ import {
   requestPermission,
   sendNotification,
 } from "@tauri-apps/plugin-notification";
-import type { HistoryEntry } from "./types";
+import type { HistoryEntry, FleetMachine } from "./types";
 import type {
   AppConfig,
   ComponentStatus,
@@ -71,6 +71,7 @@ export const getHistory = () => invoke<HistoryEntry[]>("get_history");
 
 export const exportConfig = () => invoke<string>("export_config");
 export const importConfig = () => invoke<AppConfig>("import_config");
+export const getFleet = () => invoke<FleetMachine[]>("get_fleet");
 
 /** Show a native desktop notification (requests permission if needed). */
 export async function notify(title: string, body: string): Promise<void> {

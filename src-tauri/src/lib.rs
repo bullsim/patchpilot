@@ -195,6 +195,41 @@ async fn import_config() -> Result<AppConfig, String> {
     Ok(cfg)
 }
 
+/// Read all machines' status from the shared fleet Gist.
+#[tauri::command]
+async fn get_fleet() -> Result<Vec<serde_json::Value>, String> {
+    let cfg = config::load();
+    if cfg.fleet_gist.trim().is_empty() || cfg.fleet_token.trim().is_empty() {
+        return Err("Fleet not configured (set Gist id + token in Settings)".into());
+    }
+    let auth = format!("Authorization: Bearer {}", cfg.fleet_token.trim());
+    let url = format!("https://api.github.com/gists/{}", cfg.fleet_gist.trim());
+    let res = util::run_cmd(
+        "curl",
+        &[
+            "-s", "-m", "20", "-H", &auth, "-H", "Accept: application/vnd.github+json",
+            "-H", "User-Agent: PatchPilot", &url,
+        ],
+        std::time::Duration::from_secs(25),
+    )
+    .await;
+    let v: serde_json::Value =
+        serde_json::from_str(&res.stdout).map_err(|_| "Couldn't reach the fleet Gist".to_string())?;
+    let files = v
+        .get("files")
+        .and_then(|f| f.as_object())
+        .ok_or("Gist has no files (check id/token)")?;
+    let mut out = Vec::new();
+    for f in files.values() {
+        if let Some(content) = f.get("content").and_then(|c| c.as_str()) {
+            if let Ok(m) = serde_json::from_str::<serde_json::Value>(content) {
+                out.push(m);
+            }
+        }
+    }
+    Ok(out)
+}
+
 #[tauri::command]
 async fn plan_run(mode: RunMode, state: State<'_, AppState>) -> Result<Vec<ComponentStatus>, String> {
     let sys = cached_sys(&state).await;
@@ -213,7 +248,8 @@ async fn start_run(mode: RunMode, app: AppHandle, state: State<'_, AppState>) ->
     let cfg = config::load();
     let cancel = state.cancel.clone();
     let running = state.running.clone();
-    let report_url = cfg.report_url.clone();
+    let fleet_gist = cfg.fleet_gist.clone();
+    let fleet_token = cfg.fleet_token.clone();
     let reporter: Arc<dyn Reporter> = Arc::new(EventReporter {
         app: app.clone(),
         log: FileLog::new(),
@@ -222,7 +258,7 @@ async fn start_run(mode: RunMode, app: AppHandle, state: State<'_, AppState>) ->
     tauri::async_runtime::spawn(async move {
         let summary = orchestrator::run_all(mode, sys.clone(), cfg, reporter, cancel).await;
         record_history(&summary);
-        report_status(&report_url, &sys, &summary).await;
+        report_status(&fleet_gist, &fleet_token, &sys, &summary).await;
         running.store(false, Ordering::SeqCst);
     });
     Ok(())
@@ -239,7 +275,8 @@ async fn run_one(id: String, app: AppHandle, state: State<'_, AppState>) -> Resu
     let cfg = config::load();
     let cancel = state.cancel.clone();
     let running = state.running.clone();
-    let report_url = cfg.report_url.clone();
+    let fleet_gist = cfg.fleet_gist.clone();
+    let fleet_token = cfg.fleet_token.clone();
     let reporter: Arc<dyn Reporter> = Arc::new(EventReporter {
         app: app.clone(),
         log: FileLog::new(),
@@ -248,7 +285,7 @@ async fn run_one(id: String, app: AppHandle, state: State<'_, AppState>) -> Resu
     tauri::async_runtime::spawn(async move {
         let summary = orchestrator::run_one(&id, sys.clone(), cfg, reporter, cancel).await;
         record_history(&summary);
-        report_status(&report_url, &sys, &summary).await;
+        report_status(&fleet_gist, &fleet_token, &sys, &summary).await;
         running.store(false, Ordering::SeqCst);
     });
     Ok(())
@@ -315,13 +352,14 @@ fn hostname() -> String {
         .unwrap_or_else(|| "unknown".into())
 }
 
-/// POST a small status report to the fleet dashboard (best effort, via curl).
-async fn report_status(report_url: &str, sys: &SystemInfo, summary: &model::RunSummary) {
-    if report_url.trim().is_empty() {
+/// Write this machine's status into the shared fleet Gist (best effort, via curl).
+async fn report_status(gist: &str, token: &str, sys: &SystemInfo, summary: &model::RunSummary) {
+    if gist.trim().is_empty() || token.trim().is_empty() {
         return;
     }
-    let payload = serde_json::json!({
-        "hostname": hostname(),
+    let host = hostname();
+    let status = serde_json::json!({
+        "hostname": host,
         "os": sys.os,
         "manufacturer": sys.manufacturer,
         "model": sys.model,
@@ -334,19 +372,28 @@ async fn report_status(report_url: &str, sys: &SystemInfo, summary: &model::RunS
         "rebootRequired": summary.reboot_required,
         "durationSecs": summary.duration_secs,
         "timestamp": chrono::Local::now().to_rfc3339(),
-    });
-    let tmp = paths::app_dir().join("last_report.json");
-    if std::fs::write(&tmp, payload.to_string()).is_err() {
+    })
+    .to_string();
+    let mut files = serde_json::Map::new();
+    let fname = format!("{}.json", host.replace(['/', '\\', ' '], "_"));
+    files.insert(fname, serde_json::json!({ "content": status }));
+    let body = serde_json::json!({ "files": files }).to_string();
+
+    let tmp = paths::app_dir().join("fleet_body.json");
+    if std::fs::write(&tmp, body).is_err() {
         return;
     }
+    let auth = format!("Authorization: Bearer {}", token.trim());
+    let url = format!("https://api.github.com/gists/{}", gist.trim());
     let data = format!("@{}", tmp.display());
     let _ = util::run_cmd(
         "curl",
         &[
-            "-s", "-m", "15", "-X", "POST", "-H", "Content-Type: application/json",
-            "--data-binary", &data, report_url,
+            "-s", "-m", "20", "-X", "PATCH", "-H", &auth,
+            "-H", "Accept: application/vnd.github+json", "-H", "User-Agent: PatchPilot",
+            "-H", "Content-Type: application/json", "--data-binary", &data, &url,
         ],
-        std::time::Duration::from_secs(20),
+        std::time::Duration::from_secs(25),
     )
     .await;
 }
@@ -540,6 +587,7 @@ pub fn run() {
             get_history,
             export_config,
             import_config,
+            get_fleet,
         ])
         .run(tauri::generate_context!())
         .expect("error while running PatchPilot");
@@ -557,13 +605,14 @@ pub fn run_silent(args: &[String]) {
     rt.block_on(async {
         let sys = Arc::new(system_info::detect().await);
         let cfg = config::load();
-        let report_url = cfg.report_url.clone();
+        let fleet_gist = cfg.fleet_gist.clone();
+    let fleet_token = cfg.fleet_token.clone();
         let auto_reboot = cfg.auto_reboot;
         let reporter: Arc<dyn Reporter> = Arc::new(CliReporter { log: FileLog::new() });
         let cancel = Arc::new(AtomicBool::new(false));
         let summary = orchestrator::run_all(mode, sys.clone(), cfg, reporter, cancel).await;
         record_history(&summary);
-        report_status(&report_url, &sys, &summary).await;
+        report_status(&fleet_gist, &fleet_token, &sys, &summary).await;
         // Unattended firmware updates that need a reboot: restart so they finish.
         if summary.reboot_required && auto_reboot {
             let _ = reboot::schedule("now").await;

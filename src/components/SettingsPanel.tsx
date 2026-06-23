@@ -155,6 +155,28 @@ export function SettingsPanel({ config, onSave, onClose }: Props) {
             ))}
         </div>
 
+        <div className="field-label">Fleet (see all machines — uses a private GitHub Gist)</div>
+        <div className="field-row">
+          <label className="field">
+            <span>Gist id</span>
+            <input
+              type="text"
+              value={draft.fleetGist}
+              placeholder="e.g. 3f9a…"
+              onChange={(e) => setDraft((d) => ({ ...d, fleetGist: e.target.value.trim() }))}
+            />
+          </label>
+          <label className="field">
+            <span>GitHub token (gist scope)</span>
+            <input
+              type="password"
+              value={draft.fleetToken}
+              placeholder="ghp_… / github_pat_…"
+              onChange={(e) => setDraft((d) => ({ ...d, fleetToken: e.target.value.trim() }))}
+            />
+          </label>
+        </div>
+
         <div className="field-label">Sync across machines</div>
         <div className="field-row">
           <button

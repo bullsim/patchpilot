@@ -67,5 +67,23 @@ export interface AppConfig {
   haUrl: string;
   haToken: string;
   wingetExcludes: string[];
+  fleetGist: string;
+  fleetToken: string;
   components: Record<string, boolean>;
+}
+
+export interface FleetMachine {
+  hostname: string;
+  os: string;
+  manufacturer?: string;
+  model?: string;
+  version: string;
+  mode: RunMode;
+  ok: number;
+  warn: number;
+  fail: number;
+  skip: number;
+  rebootRequired: boolean;
+  durationSecs: number;
+  timestamp: string;
 }

@@ -119,6 +119,20 @@ sudo ./install-schedule-linux.sh 03:00 All
 All three invoke the same `--silent --mode` headless path. Updates require admin/root;
 on Windows the GUI app auto-elevates, mac/Linux prompt via the OS when needed.
 
+## Fleet view (see all your machines — free, no server)
+
+A lightweight "Intune for people without Intune": every machine writes its status to a shared
+private **GitHub Gist**, and the **🖥️ Fleet** button shows them all (OS, version, ✓/⚠/✗,
+reboot-pending, last-seen). No server, no licensing.
+
+Setup (once):
+1. Create a **secret Gist** at <https://gist.github.com> (any file) and copy its id from the URL.
+2. Create a GitHub token with the **gist** scope (Settings → Developer settings → tokens).
+3. In PatchPilot → **Settings → Fleet**, paste the **Gist id** + **token**, Save.
+4. **Export config** and import it on your other machines so they all report to the same Gist.
+
+Each run then updates `<hostname>.json` in the Gist; open **🖥️ Fleet** on any machine to see them all.
+
 ## Auto-update (the app updates itself)
 
 PatchPilot updates itself across all your machines via the Tauri updater + GitHub Releases.

@@ -74,6 +74,11 @@ pub struct AppConfig {
     /// winget package ids to skip during "upgrade --all" (pinned).
     #[serde(default)]
     pub winget_excludes: Vec<String>,
+    /// Fleet view: a private GitHub Gist id + token (gist scope) shared across machines.
+    #[serde(default)]
+    pub fleet_gist: String,
+    #[serde(default)]
+    pub fleet_token: String,
     #[serde(default)]
     pub components: BTreeMap<String, bool>,
 }
@@ -111,6 +116,8 @@ impl Default for AppConfig {
             ha_url: String::new(),
             ha_token: String::new(),
             winget_excludes: Vec::new(),
+            fleet_gist: String::new(),
+            fleet_token: String::new(),
             components,
         }
     }

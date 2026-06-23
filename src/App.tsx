@@ -4,6 +4,7 @@ import { ProgressRing } from "./components/ProgressRing";
 import { RebootBanner } from "./components/RebootBanner";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { HistoryPanel } from "./components/HistoryPanel";
+import { FleetPanel } from "./components/FleetPanel";
 import * as api from "./lib/api";
 import type {
   AppConfig,
@@ -27,6 +28,7 @@ export default function App() {
   const [elapsed, setElapsed] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showFleet, setShowFleet] = useState(false);
   const [isAdmin, setIsAdmin] = useState(true);
 
   const [rebootCountdown, setRebootCountdown] = useState<number | null>(null);
@@ -264,6 +266,9 @@ export default function App() {
             ))}
           </div>
           <UpdatePill state={upd} version={updVer} onClick={upd === "available" ? installAppUpdate : () => checkAppUpdate(true)} />
+          <button type="button" className="icon-btn" title="Fleet (all machines)" onClick={() => setShowFleet(true)}>
+            🖥️
+          </button>
           <button type="button" className="icon-btn" title="Run history" onClick={() => setShowHistory(true)}>
             📜
           </button>
@@ -359,6 +364,7 @@ export default function App() {
       </footer>
 
       {showHistory && <HistoryPanel onClose={() => setShowHistory(false)} />}
+      {showFleet && <FleetPanel onClose={() => setShowFleet(false)} />}
 
       {showSettings && config && (
         <SettingsPanel
