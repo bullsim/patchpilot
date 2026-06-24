@@ -6,6 +6,7 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { FleetPanel } from "./components/FleetPanel";
 import * as api from "./lib/api";
+import { compliance } from "./lib/fleet";
 import type {
   AppConfig,
   ComponentStatus,
@@ -87,6 +88,25 @@ export default function App() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // fleet alert on launch: notify if any machine needs attention
+  const alerted = useRef(false);
+  useEffect(() => {
+    if (alerted.current || !config?.fleetGist || !config?.fleetToken) return;
+    alerted.current = true;
+    api
+      .getFleet()
+      .then((machines) => {
+        const bad = machines.filter((m) => !compliance(m, config.complianceDays || 7).compliant);
+        if (bad.length > 0) {
+          api.notify(
+            "PatchPilot — fleet needs attention",
+            `${bad.length} machine(s): ${bad.map((m) => m.hostname).join(", ")}`
+          );
+        }
+      })
+      .catch(() => {});
+  }, [config]);
 
   useEffect(() => {
     api.getSystemInfo().then(setSys).catch(console.error);
