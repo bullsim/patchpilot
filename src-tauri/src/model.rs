@@ -80,6 +80,13 @@ pub struct ComponentStatus {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CompResult {
+    pub name: String,
+    pub status: Status,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RunSummary {
     pub mode: RunMode,
     pub ok: u32,
@@ -88,4 +95,6 @@ pub struct RunSummary {
     pub skip: u32,
     pub duration_secs: u64,
     pub reboot_required: bool,
+    #[serde(default)]
+    pub components: Vec<CompResult>,
 }

@@ -179,6 +179,13 @@ async fn run_list(
             _ => {}
         }
     }
+    let components: Vec<crate::model::CompResult> = comps
+        .iter()
+        .map(|m| crate::model::CompResult {
+            name: m.name.to_string(),
+            status: latest.get(m.id).copied().unwrap_or(crate::model::Status::Skipped),
+        })
+        .collect();
     drop(latest);
 
     let summary = RunSummary {
@@ -189,6 +196,7 @@ async fn run_list(
         skip,
         duration_secs: started.elapsed().as_secs(),
         reboot_required: tracker.reboot.load(Ordering::SeqCst),
+        components,
     };
     tracker.log(&format!(
         "=== Done: ✓{ok} ⚠{warn} ✗{fail} ○{skip} in {}s ===",

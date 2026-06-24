@@ -35,6 +35,11 @@ export function FleetPanel({
       .catch((e) => alert(String(e)));
   };
 
+  const problems = (m: FleetMachine): string[] =>
+    (m.components ?? [])
+      .filter((c) => c.status === "Failed" || c.status === "Warning")
+      .map((c) => `${c.status === "Failed" ? "✗" : "⚠"} ${c.name}`);
+
   const windowDays = complianceDays || 7;
   const judged = (rows ?? []).map((m) => ({ m, ...compliance(m, windowDays) }));
   const okCount = judged.filter((j) => j.compliant).length;
@@ -77,6 +82,11 @@ export function FleetPanel({
                   <span className="fleet-when">{ago(m.timestamp)}</span>
                 </div>
                 {!compliant && <div className="fleet-reason">{reasons.join(" · ")}</div>}
+                {problems(m).length > 0 && (
+                  <div className="fleet-issues" title="Components needing attention">
+                    {problems(m).join(", ")}
+                  </div>
+                )}
                 <div className="fleet-actions">
                   <button
                     type="button"

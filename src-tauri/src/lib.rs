@@ -470,6 +470,7 @@ async fn report_status(gist: &str, token: &str, sys: &SystemInfo, summary: &mode
         "skip": summary.skip,
         "rebootRequired": summary.reboot_required,
         "durationSecs": summary.duration_secs,
+        "components": summary.components,
         "timestamp": chrono::Local::now().to_rfc3339(),
     })
     .to_string();

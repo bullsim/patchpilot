@@ -87,4 +87,5 @@ export interface FleetMachine {
   rebootRequired: boolean;
   durationSecs: number;
   timestamp: string;
+  components?: { name: string; status: string }[];
 }
