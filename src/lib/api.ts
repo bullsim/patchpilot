@@ -72,6 +72,9 @@ export const getHistory = () => invoke<HistoryEntry[]>("get_history");
 export const exportConfig = () => invoke<string>("export_config");
 export const importConfig = () => invoke<AppConfig>("import_config");
 export const getFleet = () => invoke<FleetMachine[]>("get_fleet");
+/** action: "run-all" | "run-software" | "run-firmware" | "reboot" */
+export const sendCommand = (host: string, action: string) =>
+  invoke<void>("send_command", { host, action });
 
 /** Show a native desktop notification (requests permission if needed). */
 export async function notify(title: string, body: string): Promise<void> {

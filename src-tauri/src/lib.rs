@@ -230,6 +230,99 @@ async fn get_fleet() -> Result<Vec<serde_json::Value>, String> {
     Ok(out)
 }
 
+// ---------------- remote commands (via the fleet Gist) ----------------
+
+async fn gist_get(gist: &str, token: &str) -> Option<serde_json::Value> {
+    let auth = format!("Authorization: Bearer {}", token.trim());
+    let url = format!("https://api.github.com/gists/{}", gist.trim());
+    let res = util::run_cmd(
+        "curl",
+        &["-s", "-m", "20", "-H", &auth, "-H", "Accept: application/vnd.github+json", "-H", "User-Agent: PatchPilot", &url],
+        std::time::Duration::from_secs(25),
+    )
+    .await;
+    serde_json::from_str(&res.stdout).ok()
+}
+
+async fn gist_put_file(gist: &str, token: &str, filename: &str, content: &str) {
+    let mut files = serde_json::Map::new();
+    files.insert(filename.to_string(), serde_json::json!({ "content": content }));
+    let body = serde_json::json!({ "files": files }).to_string();
+    let tmp = paths::app_dir().join("gist_put.json");
+    if std::fs::write(&tmp, body).is_err() {
+        return;
+    }
+    let auth = format!("Authorization: Bearer {}", token.trim());
+    let url = format!("https://api.github.com/gists/{}", gist.trim());
+    let data = format!("@{}", tmp.display());
+    let _ = util::run_cmd(
+        "curl",
+        &[
+            "-s", "-m", "20", "-X", "PATCH", "-H", &auth, "-H", "Accept: application/vnd.github+json",
+            "-H", "User-Agent: PatchPilot", "-H", "Content-Type: application/json", "--data-binary", &data, &url,
+        ],
+        std::time::Duration::from_secs(25),
+    )
+    .await;
+}
+
+fn read_commands(gist: &serde_json::Value) -> serde_json::Value {
+    gist.get("files")
+        .and_then(|f| f.get("_commands.json"))
+        .and_then(|f| f.get("content"))
+        .and_then(|c| c.as_str())
+        .and_then(|s| serde_json::from_str(s).ok())
+        .unwrap_or_else(|| serde_json::json!({}))
+}
+
+/// Queue a command (run-all / run-software / run-firmware / reboot) for a machine.
+#[tauri::command]
+async fn send_command(host: String, action: String) -> Result<(), String> {
+    let cfg = config::load();
+    if cfg.fleet_gist.trim().is_empty() || cfg.fleet_token.trim().is_empty() {
+        return Err("Fleet not configured".into());
+    }
+    let gist = gist_get(&cfg.fleet_gist, &cfg.fleet_token).await.ok_or("Couldn't reach the fleet Gist")?;
+    let mut cmds = read_commands(&gist);
+    let ts = chrono::Local::now().timestamp_millis();
+    if let Some(obj) = cmds.as_object_mut() {
+        obj.insert(host, serde_json::json!({ "action": action, "ts": ts }));
+    }
+    gist_put_file(&cfg.fleet_gist, &cfg.fleet_token, "_commands.json", &cmds.to_string()).await;
+    Ok(())
+}
+
+/// Poll the Gist for a command targeting this machine and run it once.
+async fn check_commands(app: &AppHandle) {
+    let cfg = config::load();
+    if cfg.fleet_gist.trim().is_empty() || cfg.fleet_token.trim().is_empty() {
+        return;
+    }
+    let Some(gist) = gist_get(&cfg.fleet_gist, &cfg.fleet_token).await else {
+        return;
+    };
+    let cmds = read_commands(&gist);
+    let host = hostname();
+    let Some(entry) = cmds.get(&host) else {
+        return;
+    };
+    let ts = entry.get("ts").and_then(|t| t.as_i64()).unwrap_or(0);
+    let action = entry.get("action").and_then(|a| a.as_str()).unwrap_or("").to_string();
+    let last_path = paths::app_dir().join("last_cmd.txt");
+    let last: i64 = std::fs::read_to_string(&last_path).ok().and_then(|s| s.trim().parse().ok()).unwrap_or(0);
+    if ts <= last {
+        return;
+    }
+    let _ = std::fs::write(&last_path, ts.to_string());
+    match action.as_str() {
+        "run-all" => { let _ = begin_run(app.clone(), RunMode::All).await; }
+        "run-software" => { let _ = begin_run(app.clone(), RunMode::Software).await; }
+        "run-firmware" => { let _ = begin_run(app.clone(), RunMode::Firmware).await; }
+        "reboot" => { let _ = reboot::schedule("now").await; }
+        _ => {}
+    }
+}
+
 #[tauri::command]
 async fn plan_run(mode: RunMode, state: State<'_, AppState>) -> Result<Vec<ComponentStatus>, String> {
     let sys = cached_sys(&state).await;
@@ -238,7 +331,13 @@ async fn plan_run(mode: RunMode, state: State<'_, AppState>) -> Result<Vec<Compo
 }
 
 #[tauri::command]
-async fn start_run(mode: RunMode, app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+async fn start_run(mode: RunMode, app: AppHandle) -> Result<(), String> {
+    begin_run(app, mode).await
+}
+
+/// Start a full run in the given mode. Usable from a command or the command poller.
+async fn begin_run(app: AppHandle, mode: RunMode) -> Result<(), String> {
+    let state = app.state::<AppState>();
     if state.running.swap(true, Ordering::SeqCst) {
         return Err("A run is already in progress".into());
     }
@@ -561,6 +660,16 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
+
+            // Poll the fleet Gist for remote commands targeting this machine.
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                loop {
+                    check_commands(&handle).await;
+                    tokio::time::sleep(std::time::Duration::from_secs(300)).await;
+                }
+            });
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -588,6 +697,7 @@ pub fn run() {
             export_config,
             import_config,
             get_fleet,
+            send_command,
         ])
         .run(tauri::generate_context!())
         .expect("error while running PatchPilot");

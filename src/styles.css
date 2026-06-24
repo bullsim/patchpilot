@@ -620,6 +620,19 @@ body {
 .fleet-summary.ok { color: var(--green); background: color-mix(in srgb, var(--green) 16%, transparent); }
 .fleet-summary.bad { color: var(--red); background: color-mix(in srgb, var(--red) 16%, transparent); }
 .fleet-reason { font-size: 11px; color: #fca5a5; margin-top: 6px; }
+.fleet-actions { display: flex; gap: 6px; margin-top: 10px; }
+.fleet-btn {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 650;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+}
+.fleet-btn:hover { background: var(--surface-hover); border-color: var(--blue); }
 .modal-actions {
   display: flex;
   justify-content: flex-end;

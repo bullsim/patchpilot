@@ -26,6 +26,14 @@ export function FleetPanel({
     return () => clearInterval(t);
   }, [load]);
 
+  const cmd = (host: string, action: string, confirmMsg: string) => {
+    if (!confirm(confirmMsg + "\n\nThe machine runs it within ~5 minutes (next check-in).")) return;
+    api
+      .sendCommand(host, action)
+      .then(() => api.notify("PatchPilot", `Command queued for ${host}`))
+      .catch((e) => alert(String(e)));
+  };
+
   const windowDays = complianceDays || 7;
   const judged = (rows ?? []).map((m) => ({ m, ...compliance(m, windowDays) }));
   const okCount = judged.filter((j) => j.compliant).length;
@@ -68,6 +76,24 @@ export function FleetPanel({
                   <span className="fleet-when">{ago(m.timestamp)}</span>
                 </div>
                 {!compliant && <div className="fleet-reason">{reasons.join(" · ")}</div>}
+                <div className="fleet-actions">
+                  <button
+                    type="button"
+                    className="fleet-btn"
+                    title="Run all updates on this machine"
+                    onClick={() => cmd(m.hostname, "run-all", `Run all updates on ${m.hostname}?`)}
+                  >
+                    ▶ Run
+                  </button>
+                  <button
+                    type="button"
+                    className="fleet-btn"
+                    title="Restart this machine"
+                    onClick={() => cmd(m.hostname, "reboot", `Restart ${m.hostname}?`)}
+                  >
+                    ⟳ Reboot
+                  </button>
+                </div>
               </div>
             );
           })}
