@@ -364,7 +364,9 @@ export default function App() {
       </footer>
 
       {showHistory && <HistoryPanel onClose={() => setShowHistory(false)} />}
-      {showFleet && <FleetPanel onClose={() => setShowFleet(false)} />}
+      {showFleet && (
+        <FleetPanel onClose={() => setShowFleet(false)} complianceDays={config?.complianceDays ?? 7} />
+      )}
 
       {showSettings && config && (
         <SettingsPanel

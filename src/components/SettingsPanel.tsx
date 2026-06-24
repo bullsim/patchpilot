@@ -177,6 +177,18 @@ export function SettingsPanel({ config, onSave, onClose }: Props) {
           </label>
         </div>
 
+        <label className="field">
+          <span>Compliant if updated within (days)</span>
+          <input
+            type="number"
+            min={1}
+            value={draft.complianceDays}
+            onChange={(e) =>
+              setDraft((d) => ({ ...d, complianceDays: Math.max(1, Number(e.target.value) || 7) }))
+            }
+          />
+        </label>
+
         <div className="field-label">Sync across machines</div>
         <div className="field-row">
           <button

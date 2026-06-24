@@ -79,6 +79,9 @@ pub struct AppConfig {
     pub fleet_gist: String,
     #[serde(default)]
     pub fleet_token: String,
+    /// A machine is "compliant" if it ran successfully within this many days.
+    #[serde(default = "default_compliance_days")]
+    pub compliance_days: u32,
     #[serde(default)]
     pub components: BTreeMap<String, bool>,
 }
@@ -100,6 +103,10 @@ fn default_true() -> bool {
     true
 }
 
+fn default_compliance_days() -> u32 {
+    7
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         let mut components = BTreeMap::new();
@@ -118,6 +125,7 @@ impl Default for AppConfig {
             winget_excludes: Vec::new(),
             fleet_gist: String::new(),
             fleet_token: String::new(),
+            compliance_days: default_compliance_days(),
             components,
         }
     }

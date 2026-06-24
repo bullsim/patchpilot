@@ -69,6 +69,7 @@ export interface AppConfig {
   wingetExcludes: string[];
   fleetGist: string;
   fleetToken: string;
+  complianceDays: number;
   components: Record<string, boolean>;
 }
 
