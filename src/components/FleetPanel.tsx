@@ -40,6 +40,13 @@ export function FleetPanel({
       .filter((c) => c.status === "Failed" || c.status === "Warning")
       .map((c) => `${c.status === "Failed" ? "✗" : "⚠"} ${c.name}`);
 
+  const broadcast = (action: string, confirmMsg: string) => {
+    if (!rows || !confirm(confirmMsg + "\n\nEach runs it within ~5 minutes.")) return;
+    Promise.allSettled(rows.map((m) => api.sendCommand(m.hostname, action)))
+      .then(() => api.notify("PatchPilot", `Command queued for ${rows.length} machine(s)`))
+      .catch(() => {});
+  };
+
   const windowDays = complianceDays || 7;
   const judged = (rows ?? []).map((m) => ({ m, ...compliance(m, windowDays) }));
   const okCount = judged.filter((j) => j.compliant).length;
@@ -49,11 +56,22 @@ export function FleetPanel({
       <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
         <div className="fleet-head">
           <h2>Fleet</h2>
-          {rows && rows.length > 0 && (
-            <span className={`fleet-summary ${okCount === rows.length ? "ok" : "bad"}`}>
-              {okCount}/{rows.length} compliant
-            </span>
-          )}
+          <div className="fleet-head-right">
+            {rows && rows.length > 0 && (
+              <span className={`fleet-summary ${okCount === rows.length ? "ok" : "bad"}`}>
+                {okCount}/{rows.length} compliant
+              </span>
+            )}
+            {rows && rows.length > 0 && (
+              <button
+                type="button"
+                className="fleet-btn"
+                onClick={() => broadcast("run-all", `Run all updates on ALL ${rows.length} machines?`)}
+              >
+                ▶ Run all machines
+              </button>
+            )}
+          </div>
         </div>
 
         {err && <div className="field-label">{err}</div>}

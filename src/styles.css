@@ -616,6 +616,8 @@ body {
 .fleet-counts { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 13px; margin-top: 8px; }
 .fleet-when { margin-left: auto; color: var(--faint); font-weight: 500; font-size: 11px; }
 .fleet-head { display: flex; align-items: center; justify-content: space-between; }
+.fleet-head-right { display: flex; align-items: center; gap: 10px; }
+.fleet-head-right .fleet-btn { flex: none; }
 .fleet-summary { font-size: 13px; font-weight: 700; padding: 4px 12px; border-radius: 999px; }
 .fleet-summary.ok { color: var(--green); background: color-mix(in srgb, var(--green) 16%, transparent); }
 .fleet-summary.bad { color: var(--red); background: color-mix(in srgb, var(--red) 16%, transparent); }
