@@ -15,6 +15,23 @@ export function compliance(m: FleetMachine, days: number): Compliance {
   return { compliant: reasons.length === 0, reasons };
 }
 
+/** Compare dotted version strings. >0 if a newer than b, <0 if older, 0 if equal. */
+export function cmpVersion(a: string, b: string): number {
+  const pa = (a || "").split(".").map((n) => parseInt(n, 10) || 0);
+  const pb = (b || "").split(".").map((n) => parseInt(n, 10) || 0);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d !== 0) return d;
+  }
+  return 0;
+}
+
+/** The highest PatchPilot version seen across the fleet (the upgrade target). */
+export function newestVersion(rows: FleetMachine[]): string {
+  return rows.reduce((max, m) => (cmpVersion(m.version, max) > 0 ? m.version : max), "0.0.0");
+}
+
 export function ago(iso: string): string {
   try {
     const mins = (Date.now() - new Date(iso).getTime()) / 60000;

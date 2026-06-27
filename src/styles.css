@@ -622,6 +622,7 @@ body {
 .fleet-summary.ok { color: var(--green); background: color-mix(in srgb, var(--green) 16%, transparent); }
 .fleet-summary.bad { color: var(--red); background: color-mix(in srgb, var(--red) 16%, transparent); }
 .fleet-reason { font-size: 11px; color: #fca5a5; margin-top: 6px; }
+.fleet-outdated { color: var(--amber); font-weight: 600; }
 .fleet-issues { font-size: 11px; color: var(--muted); margin-top: 6px;
   overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
   -webkit-line-clamp: 2; -webkit-box-orient: vertical; }

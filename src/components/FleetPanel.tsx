@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import * as api from "../lib/api";
 import type { FleetMachine, FleetPolicy } from "../lib/types";
-import { compliance, ago } from "../lib/fleet";
+import { compliance, ago, cmpVersion, newestVersion } from "../lib/fleet";
 
 export function FleetPanel({
   onClose,
@@ -52,6 +52,7 @@ export function FleetPanel({
   const windowDays = complianceDays || 7;
   const judged = (rows ?? []).map((m) => ({ m, ...compliance(m, windowDays) }));
   const okCount = judged.filter((j) => j.compliant).length;
+  const newest = newestVersion(rows ?? []);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -106,6 +107,11 @@ export function FleetPanel({
                 <div className="ucard-name">{m.hostname}</div>
                 <div className="ucard-detail">
                   {[m.manufacturer, m.model].filter(Boolean).join(" ")} · {m.os} · v{m.version}
+                  {cmpVersion(m.version, newest) < 0 && (
+                    <span className="fleet-outdated" title={`PatchPilot ${newest} available`}>
+                      {" "}⬆ v{newest}
+                    </span>
+                  )}
                 </div>
                 <div className="fleet-counts">
                   <span style={{ color: "var(--green)" }}>✓{m.ok}</span>
