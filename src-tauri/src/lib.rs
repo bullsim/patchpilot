@@ -371,6 +371,20 @@ async fn get_policy() -> Result<Option<serde_json::Value>, String> {
     Ok(read_policy(&gist))
 }
 
+/// Pull and apply the fleet policy immediately (instead of waiting for the poller).
+#[tauri::command]
+async fn apply_policy_now(app: AppHandle) -> Result<(), String> {
+    let cfg = config::load();
+    if !cfg.follow_policy {
+        return Err("Turn on \"Follow fleet policy\" first".into());
+    }
+    if cfg.fleet_gist.trim().is_empty() || cfg.fleet_token.trim().is_empty() {
+        return Err("Fleet not configured (set Gist id + token in Settings)".into());
+    }
+    check_policy(&app).await;
+    Ok(())
+}
+
 /// If this machine follows the fleet policy, pull `_policy.json` and apply the
 /// shared settings (component toggles, schedule, excludes, etc.). Opt-in; secrets
 /// are never touched. Re-arms the OS schedule only when schedule fields change.
@@ -842,6 +856,7 @@ pub fn run() {
             send_command,
             publish_policy,
             get_policy,
+            apply_policy_now,
         ])
         .run(tauri::generate_context!())
         .expect("error while running PatchPilot");

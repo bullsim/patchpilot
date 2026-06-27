@@ -84,6 +84,8 @@ export const sendCommand = (host: string, action: string) =>
 export const publishPolicy = () => invoke<void>("publish_policy");
 /** Read the current shared fleet policy, or null if none has been published. */
 export const getPolicy = () => invoke<FleetPolicy | null>("get_policy");
+/** Pull and apply the fleet policy right now (requires Follow fleet policy on). */
+export const applyPolicyNow = () => invoke<void>("apply_policy_now");
 
 /** Show a native desktop notification (requests permission if needed). */
 export async function notify(title: string, body: string): Promise<void> {

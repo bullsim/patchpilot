@@ -216,6 +216,23 @@ export function SettingsPanel({ config, onSave, onClose }: Props) {
           >
             📡 Publish current settings as fleet policy
           </button>
+          <button
+            type="button"
+            className="mode-btn"
+            disabled={!draft.followPolicy || !draft.fleetGist.trim() || !draft.fleetToken.trim()}
+            title="Pull and apply the shared policy now (otherwise applied within ~5 min)"
+            onClick={async () => {
+              try {
+                await api.saveConfig(draft);
+                await api.applyPolicyNow();
+                onSave(await api.getConfig());
+              } catch (e) {
+                alert(String(e));
+              }
+            }}
+          >
+            ⬇ Apply policy now
+          </button>
         </div>
 
         <div className="field-label">Sync across machines</div>
