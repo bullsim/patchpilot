@@ -323,6 +323,124 @@ async fn check_commands(app: &AppHandle) {
     }
 }
 
+// ---------------- central policy (via the fleet Gist) ----------------
+
+fn read_policy(gist: &serde_json::Value) -> Option<serde_json::Value> {
+    gist.get("files")
+        .and_then(|f| f.get("_policy.json"))
+        .and_then(|f| f.get("content"))
+        .and_then(|c| c.as_str())
+        .and_then(|s| serde_json::from_str(s).ok())
+}
+
+/// Publish this machine's settings as the shared fleet policy. NO secrets are
+/// included (tokens, webhooks, HA credentials stay local).
+#[tauri::command]
+async fn publish_policy() -> Result<(), String> {
+    let cfg = config::load();
+    if cfg.fleet_gist.trim().is_empty() || cfg.fleet_token.trim().is_empty() {
+        return Err("Fleet not configured (set Gist id + token in Settings)".into());
+    }
+    let policy = serde_json::json!({
+        "components": cfg.components,
+        "wingetExcludes": cfg.winget_excludes,
+        "complianceDays": cfg.compliance_days,
+        "scheduleEnabled": cfg.schedule_enabled,
+        "scheduleTime": cfg.schedule_time,
+        "scheduledRunMode": cfg.scheduled_run_mode.as_str(),
+        "autoReboot": cfg.auto_reboot,
+        "updatedBy": hostname(),
+        "updatedAt": chrono::Local::now().to_rfc3339(),
+    })
+    .to_string();
+    gist_put_file(&cfg.fleet_gist, &cfg.fleet_token, "_policy.json", &policy).await;
+    Ok(())
+}
+
+/// If this machine follows the fleet policy, pull `_policy.json` and apply the
+/// shared settings (component toggles, schedule, excludes, etc.). Opt-in; secrets
+/// are never touched. Re-arms the OS schedule only when schedule fields change.
+async fn check_policy() {
+    let cfg = config::load();
+    if !cfg.follow_policy || cfg.fleet_gist.trim().is_empty() || cfg.fleet_token.trim().is_empty() {
+        return;
+    }
+    let Some(gist) = gist_get(&cfg.fleet_gist, &cfg.fleet_token).await else {
+        return;
+    };
+    let Some(policy) = read_policy(&gist) else {
+        return;
+    };
+
+    let mut cfg = cfg;
+    let mut changed = false;
+    let mut schedule_changed = false;
+
+    if let Some(map) = policy.get("components").and_then(|v| v.as_object()) {
+        for (k, v) in map {
+            if let Some(b) = v.as_bool() {
+                if cfg.components.get(k) != Some(&b) {
+                    cfg.components.insert(k.clone(), b);
+                    changed = true;
+                }
+            }
+        }
+    }
+    if let Some(arr) = policy.get("wingetExcludes").and_then(|v| v.as_array()) {
+        let ex: Vec<String> = arr.iter().filter_map(|s| s.as_str().map(str::to_string)).collect();
+        if cfg.winget_excludes != ex {
+            cfg.winget_excludes = ex;
+            changed = true;
+        }
+    }
+    if let Some(n) = policy.get("complianceDays").and_then(|v| v.as_u64()) {
+        if cfg.compliance_days != n as u32 {
+            cfg.compliance_days = n as u32;
+            changed = true;
+        }
+    }
+    if let Some(b) = policy.get("scheduleEnabled").and_then(|v| v.as_bool()) {
+        if cfg.schedule_enabled != b {
+            cfg.schedule_enabled = b;
+            changed = true;
+            schedule_changed = true;
+        }
+    }
+    if let Some(s) = policy.get("scheduleTime").and_then(|v| v.as_str()) {
+        if cfg.schedule_time != s {
+            cfg.schedule_time = s.to_string();
+            changed = true;
+            schedule_changed = true;
+        }
+    }
+    if let Some(s) = policy.get("scheduledRunMode").and_then(|v| v.as_str()) {
+        let m = RunMode::from_str(s);
+        if cfg.scheduled_run_mode.as_str() != m.as_str() {
+            cfg.scheduled_run_mode = m;
+            changed = true;
+            schedule_changed = true;
+        }
+    }
+    if let Some(b) = policy.get("autoReboot").and_then(|v| v.as_bool()) {
+        if cfg.auto_reboot != b {
+            cfg.auto_reboot = b;
+            changed = true;
+        }
+    }
+
+    if changed {
+        let _ = config::save(&cfg);
+        if schedule_changed {
+            let _ = schedule::apply(
+                cfg.schedule_enabled,
+                &cfg.schedule_time,
+                cfg.scheduled_run_mode.as_str(),
+            )
+            .await;
+        }
+    }
+}
+
 #[tauri::command]
 async fn plan_run(mode: RunMode, state: State<'_, AppState>) -> Result<Vec<ComponentStatus>, String> {
     let sys = cached_sys(&state).await;
@@ -668,6 +786,7 @@ pub fn run() {
                 tokio::time::sleep(std::time::Duration::from_secs(30)).await;
                 loop {
                     check_commands(&handle).await;
+                    check_policy().await;
                     tokio::time::sleep(std::time::Duration::from_secs(300)).await;
                 }
             });
@@ -699,6 +818,7 @@ pub fn run() {
             import_config,
             get_fleet,
             send_command,
+            publish_policy,
         ])
         .run(tauri::generate_context!())
         .expect("error while running PatchPilot");

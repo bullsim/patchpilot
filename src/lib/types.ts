@@ -70,6 +70,7 @@ export interface AppConfig {
   fleetGist: string;
   fleetToken: string;
   complianceDays: number;
+  followPolicy: boolean;
   components: Record<string, boolean>;
 }
 

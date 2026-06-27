@@ -189,6 +189,35 @@ export function SettingsPanel({ config, onSave, onClose }: Props) {
           />
         </label>
 
+        <label className="toggle toggle-spaced">
+          <input
+            type="checkbox"
+            checked={draft.followPolicy}
+            onChange={(e) => setDraft((d) => ({ ...d, followPolicy: e.target.checked }))}
+          />
+          <span>Follow fleet policy (apply shared settings from the Gist)</span>
+        </label>
+        <div className="field-row toggle-spaced">
+          <button
+            type="button"
+            className="mode-btn"
+            disabled={!draft.fleetGist.trim() || !draft.fleetToken.trim()}
+            onClick={async () => {
+              try {
+                await api.saveConfig(draft);
+                await api.publishPolicy();
+                alert(
+                  "Published. Machines with “Follow fleet policy” on will apply these settings within ~5 minutes."
+                );
+              } catch (e) {
+                alert(String(e));
+              }
+            }}
+          >
+            📡 Publish current settings as fleet policy
+          </button>
+        </div>
+
         <div className="field-label">Sync across machines</div>
         <div className="field-row">
           <button

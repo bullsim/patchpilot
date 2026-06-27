@@ -76,6 +76,9 @@ export const getFleet = () => invoke<FleetMachine[]>("get_fleet");
 export const sendCommand = (host: string, action: string) =>
   invoke<void>("send_command", { host, action });
 
+/** Publish this machine's settings as the shared fleet policy (no secrets). */
+export const publishPolicy = () => invoke<void>("publish_policy");
+
 /** Show a native desktop notification (requests permission if needed). */
 export async function notify(title: string, body: string): Promise<void> {
   try {

@@ -82,6 +82,10 @@ pub struct AppConfig {
     /// A machine is "compliant" if it ran successfully within this many days.
     #[serde(default = "default_compliance_days")]
     pub compliance_days: u32,
+    /// If true, this machine pulls and applies the shared fleet policy (component
+    /// toggles, schedule, excludes, etc.) from the Gist. Opt-in.
+    #[serde(default)]
+    pub follow_policy: bool,
     #[serde(default)]
     pub components: BTreeMap<String, bool>,
 }
@@ -126,6 +130,7 @@ impl Default for AppConfig {
             fleet_gist: String::new(),
             fleet_token: String::new(),
             compliance_days: default_compliance_days(),
+            follow_policy: false,
             components,
         }
     }
