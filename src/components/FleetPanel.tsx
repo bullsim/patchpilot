@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import * as api from "../lib/api";
-import type { FleetMachine } from "../lib/types";
+import type { FleetMachine, FleetPolicy } from "../lib/types";
 import { compliance, ago } from "../lib/fleet";
 
 export function FleetPanel({
@@ -11,6 +11,7 @@ export function FleetPanel({
   complianceDays: number;
 }) {
   const [rows, setRows] = useState<FleetMachine[] | null>(null);
+  const [policy, setPolicy] = useState<FleetPolicy | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -19,6 +20,7 @@ export function FleetPanel({
       .getFleet()
       .then((r) => setRows(r.sort((a, b) => a.hostname.localeCompare(b.hostname))))
       .catch((e) => setErr(String(e)));
+    api.getPolicy().then(setPolicy).catch(() => setPolicy(null));
   }, []);
 
   useEffect(() => {
@@ -74,6 +76,15 @@ export function FleetPanel({
           </div>
         </div>
 
+        {policy && (
+          <div className="field-label">
+            🛡 Policy published{policy.updatedBy ? ` by ${policy.updatedBy}` : ""}
+            {policy.updatedAt ? ` · ${ago(policy.updatedAt)}` : ""}
+            {" · "}
+            {(rows ?? []).filter((m) => m.followPolicy).length}/{(rows ?? []).length} following
+          </div>
+        )}
+
         {err && <div className="field-label">{err}</div>}
         {!err && rows === null && <div className="field-label">Loading…</div>}
         {!err && rows?.length === 0 && (
@@ -87,7 +98,10 @@ export function FleetPanel({
               <div className="ucard" key={m.hostname} style={{ ["--c" as string]: c }}>
                 <div className="ucard-head">
                   <span className="ucard-emoji">🖥️</span>
-                  <span className="ucard-status">{compliant ? "✓ OK" : "✗ Check"}</span>
+                  <span className="ucard-status">
+                    {m.followPolicy && <span title="Follows fleet policy">🛡 </span>}
+                    {compliant ? "✓ OK" : "✗ Check"}
+                  </span>
                 </div>
                 <div className="ucard-name">{m.hostname}</div>
                 <div className="ucard-detail">

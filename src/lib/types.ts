@@ -80,6 +80,7 @@ export interface FleetMachine {
   manufacturer?: string;
   model?: string;
   version: string;
+  followPolicy?: boolean;
   mode: RunMode;
   ok: number;
   warn: number;
@@ -89,4 +90,16 @@ export interface FleetMachine {
   durationSecs: number;
   timestamp: string;
   components?: { name: string; status: string }[];
+}
+
+export interface FleetPolicy {
+  components?: Record<string, boolean>;
+  wingetExcludes?: string[];
+  complianceDays?: number;
+  scheduleEnabled?: boolean;
+  scheduleTime?: string;
+  scheduledRunMode?: RunMode;
+  autoReboot?: boolean;
+  updatedBy?: string;
+  updatedAt?: string;
 }

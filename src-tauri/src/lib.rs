@@ -357,6 +357,19 @@ async fn publish_policy() -> Result<(), String> {
     Ok(())
 }
 
+/// Read the current shared fleet policy (`_policy.json`), or null if none exists.
+#[tauri::command]
+async fn get_policy() -> Result<Option<serde_json::Value>, String> {
+    let cfg = config::load();
+    if cfg.fleet_gist.trim().is_empty() || cfg.fleet_token.trim().is_empty() {
+        return Err("Fleet not configured (set Gist id + token in Settings)".into());
+    }
+    let gist = gist_get(&cfg.fleet_gist, &cfg.fleet_token)
+        .await
+        .ok_or("Couldn't reach the fleet Gist")?;
+    Ok(read_policy(&gist))
+}
+
 /// If this machine follows the fleet policy, pull `_policy.json` and apply the
 /// shared settings (component toggles, schedule, excludes, etc.). Opt-in; secrets
 /// are never touched. Re-arms the OS schedule only when schedule fields change.
@@ -575,12 +588,14 @@ async fn report_status(gist: &str, token: &str, sys: &SystemInfo, summary: &mode
         return;
     }
     let host = hostname();
+    let follow_policy = config::load().follow_policy;
     let status = serde_json::json!({
         "hostname": host,
         "os": sys.os,
         "manufacturer": sys.manufacturer,
         "model": sys.model,
         "version": env!("CARGO_PKG_VERSION"),
+        "followPolicy": follow_policy,
         "mode": summary.mode,
         "ok": summary.ok,
         "warn": summary.warn,
@@ -819,6 +834,7 @@ pub fn run() {
             get_fleet,
             send_command,
             publish_policy,
+            get_policy,
         ])
         .run(tauri::generate_context!())
         .expect("error while running PatchPilot");

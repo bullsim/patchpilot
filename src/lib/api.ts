@@ -7,7 +7,7 @@ import {
   requestPermission,
   sendNotification,
 } from "@tauri-apps/plugin-notification";
-import type { HistoryEntry, FleetMachine } from "./types";
+import type { HistoryEntry, FleetMachine, FleetPolicy } from "./types";
 import type {
   AppConfig,
   ComponentStatus,
@@ -78,6 +78,8 @@ export const sendCommand = (host: string, action: string) =>
 
 /** Publish this machine's settings as the shared fleet policy (no secrets). */
 export const publishPolicy = () => invoke<void>("publish_policy");
+/** Read the current shared fleet policy, or null if none has been published. */
+export const getPolicy = () => invoke<FleetPolicy | null>("get_policy");
 
 /** Show a native desktop notification (requests permission if needed). */
 export async function notify(title: string, body: string): Promise<void> {
