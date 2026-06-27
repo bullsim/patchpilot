@@ -19,6 +19,7 @@ use system_info::SystemInfo;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
+use tauri_plugin_notification::NotificationExt;
 
 // ---------------- shared run state ----------------
 
@@ -373,7 +374,7 @@ async fn get_policy() -> Result<Option<serde_json::Value>, String> {
 /// If this machine follows the fleet policy, pull `_policy.json` and apply the
 /// shared settings (component toggles, schedule, excludes, etc.). Opt-in; secrets
 /// are never touched. Re-arms the OS schedule only when schedule fields change.
-async fn check_policy() {
+async fn check_policy(app: &AppHandle) {
     let cfg = config::load();
     if !cfg.follow_policy || cfg.fleet_gist.trim().is_empty() || cfg.fleet_token.trim().is_empty() {
         return;
@@ -451,6 +452,12 @@ async fn check_policy() {
             )
             .await;
         }
+        // Tell an open UI to reload, and let the user know the policy landed.
+        let _ = app.emit("config-changed", ());
+        let _ = app.notification().builder()
+            .title("PatchPilot — fleet policy applied")
+            .body("This machine's settings were updated from the shared fleet policy.")
+            .show();
     }
 }
 
@@ -801,7 +808,7 @@ pub fn run() {
                 tokio::time::sleep(std::time::Duration::from_secs(30)).await;
                 loop {
                     check_commands(&handle).await;
-                    check_policy().await;
+                    check_policy(&handle).await;
                     tokio::time::sleep(std::time::Duration::from_secs(300)).await;
                 }
             });

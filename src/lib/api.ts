@@ -58,6 +58,10 @@ export const onLog = (cb: (line: string) => void): Promise<UnlistenFn> =>
 export const onTrayRun = (cb: (mode: RunMode) => void): Promise<UnlistenFn> =>
   listen<RunMode>("tray-run", (e) => cb(e.payload));
 
+/** Fired when the backend rewrites config (e.g. fleet policy applied). */
+export const onConfigChanged = (cb: () => void): Promise<UnlistenFn> =>
+  listen("config-changed", () => cb());
+
 // ---- App self-update (Tauri updater) ----
 
 export type { Update };

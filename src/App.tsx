@@ -89,6 +89,22 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // backend rewrote config (e.g. fleet policy applied) → reload it and refresh cards
+  useEffect(() => {
+    const p = api.onConfigChanged(() => {
+      api.getConfig().then(setConfig).catch(console.error);
+      if (!running) {
+        api
+          .planRun("All")
+          .then((plan) => setCards(new Map(plan.map((c) => [c.id, c]))))
+          .catch(() => {});
+      }
+    });
+    return () => {
+      p.then((u) => u());
+    };
+  }, [running]);
+
   // fleet alert on launch: notify if any machine needs attention
   const alerted = useRef(false);
   useEffect(() => {
