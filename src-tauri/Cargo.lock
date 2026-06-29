@@ -2462,7 +2462,7 @@ dependencies = [
 
 [[package]]
 name = "patchpilot"
-version = "0.8.4"
+version = "0.9.0"
 dependencies = [
  "chrono",
  "serde",

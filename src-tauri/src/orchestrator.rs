@@ -75,6 +75,8 @@ pub struct Ctx {
     pub ha_url: String,
     pub ha_token: String,
     pub winget_excludes: Vec<String>,
+    /// Dry-run: report what WOULD update instead of applying changes.
+    pub check_only: bool,
 }
 
 impl Ctx {
@@ -107,7 +109,19 @@ pub async fn run_all(
     cancel: Arc<AtomicBool>,
 ) -> RunSummary {
     let comps = selection(mode, &sys, &cfg);
-    run_list(mode, comps, sys, cfg, reporter, cancel).await
+    run_list(mode, comps, sys, cfg, reporter, cancel, false).await
+}
+
+/// Dry-run all selected components: report what WOULD update, change nothing.
+pub async fn check_all(
+    mode: RunMode,
+    sys: Arc<SystemInfo>,
+    cfg: AppConfig,
+    reporter: Arc<dyn Reporter>,
+    cancel: Arc<AtomicBool>,
+) -> RunSummary {
+    let comps = selection(mode, &sys, &cfg);
+    run_list(mode, comps, sys, cfg, reporter, cancel, true).await
 }
 
 /// Run a single component by id (used when a card is clicked in the UI).
@@ -120,7 +134,7 @@ pub async fn run_one(
 ) -> RunSummary {
     let comps: Vec<crate::registry::ComponentMeta> =
         crate::registry::find(id).into_iter().collect();
-    run_list(RunMode::All, comps, sys, cfg, reporter, cancel).await
+    run_list(RunMode::All, comps, sys, cfg, reporter, cancel, false).await
 }
 
 async fn run_list(
@@ -130,12 +144,14 @@ async fn run_list(
     cfg: AppConfig,
     reporter: Arc<dyn Reporter>,
     cancel: Arc<AtomicBool>,
+    check_only: bool,
 ) -> RunSummary {
     let started = Instant::now();
     let tracker = Tracker::new(reporter);
 
     tracker.log(&format!(
-        "=== PatchPilot run [{mode:?}] on {} {} — {} components ===",
+        "=== PatchPilot {} [{mode:?}] on {} {} — {} components ===",
+        if check_only { "check" } else { "run" },
         sys.manufacturer,
         sys.model,
         comps.len()
@@ -152,7 +168,7 @@ async fn run_list(
             name: meta.name.to_string(),
             category: meta.category,
         };
-        rep.set(Status::Running, "Starting…", 0);
+        rep.set(Status::Running, if check_only { "Checking…" } else { "Starting…" }, 0);
         let ctx = Ctx {
             rep,
             sys: sys.clone(),
@@ -160,6 +176,7 @@ async fn run_list(
             ha_url: cfg.ha_url.clone(),
             ha_token: cfg.ha_token.clone(),
             winget_excludes: cfg.winget_excludes.clone(),
+            check_only,
         };
         updaters::run(meta.id, &ctx).await;
     }

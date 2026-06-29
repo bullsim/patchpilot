@@ -28,6 +28,8 @@ export const planRun = (mode: RunMode) =>
   invoke<ComponentStatus[]>("plan_run", { mode });
 
 export const startRun = (mode: RunMode) => invoke<void>("start_run", { mode });
+/** Dry-run: report what would update in this mode without applying anything. */
+export const startCheck = (mode: RunMode) => invoke<void>("start_check", { mode });
 /** Run a single component by id (clicking a card). */
 export const startRunOne = (id: string) => invoke<void>("run_one", { id });
 export const cancelRun = () => invoke<void>("cancel_run");

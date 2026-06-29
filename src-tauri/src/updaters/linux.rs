@@ -16,6 +16,65 @@ pub async fn run(id: &str, ctx: &Ctx) {
     }
 }
 
+/// Dry-run: report available updates without applying. All Linux backends can
+/// list pending updates without root (apt update is the one exception, so we
+/// rely on the existing apt cache rather than refreshing it).
+pub async fn check(id: &str, ctx: &Ctx) {
+    match id {
+        "apt" => apt_check(ctx).await,
+        "flatpak" => flatpak_check(ctx).await,
+        "snap" => snap_check(ctx).await,
+        "fwupd" => fwupd_check(ctx).await,
+        _ => super::no_check(ctx),
+    }
+}
+
+async fn apt_check(ctx: &Ctx) {
+    ctx.rep.set(Status::Running, "Listing upgradable apt packages…", 40);
+    let res = run_cmd("apt-get", &["-s", "upgrade"], Duration::from_secs(180)).await;
+    // `apt-get -s upgrade` prints an "Inst <pkg> ..." line per package to be upgraded.
+    let n = res.stdout.lines().filter(|l| l.starts_with("Inst ")).count();
+    super::report_count(ctx, n, "package");
+}
+
+async fn flatpak_check(ctx: &Ctx) {
+    ctx.rep.set(Status::Running, "Checking Flatpak for updates…", 40);
+    let res = run_cmd("flatpak", &["remote-ls", "--updates"], Duration::from_secs(300)).await;
+    let n = res.stdout.lines().filter(|l| !l.trim().is_empty()).count();
+    super::report_count(ctx, n, "app");
+}
+
+async fn snap_check(ctx: &Ctx) {
+    ctx.rep.set(Status::Running, "Checking Snap for refreshes…", 40);
+    let res = run_cmd("snap", &["refresh", "--list"], Duration::from_secs(180)).await;
+    // First line is a header; "All snaps up to date." means none.
+    if res.combined().contains("All snaps up to date") {
+        return super::report_count(ctx, 0, "snap");
+    }
+    let n = res.stdout.lines().skip(1).filter(|l| !l.trim().is_empty()).count();
+    super::report_count(ctx, n, "snap");
+}
+
+async fn fwupd_check(ctx: &Ctx) {
+    ctx.rep.set(Status::Running, "Checking firmware (fwupd)…", 40);
+    run_cmd("fwupdmgr", &["refresh", "--force"], Duration::from_secs(180)).await;
+    let res = run_cmd("fwupdmgr", &["get-updates"], Duration::from_secs(180)).await;
+    // fwupd exits 2 / prints "No updates available" when there's nothing to do.
+    if res.code == Some(2) || res.combined().contains("No updates available") {
+        return super::report_count(ctx, 0, "device");
+    }
+    // Devices with updates are listed with "• <device>" / "Devices with" headers.
+    let n = res
+        .stdout
+        .lines()
+        .filter(|l| {
+            let t = l.trim_start();
+            t.starts_with('•') || t.starts_with('└') || t.starts_with("Upgrade")
+        })
+        .count();
+    super::report_count(ctx, n.max(1), "device");
+}
+
 /// Best short reason from a failed command (last non-empty stderr/stdout line).
 fn reason(res: &CmdResult) -> String {
     let pick = |s: &str| {

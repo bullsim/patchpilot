@@ -35,6 +35,8 @@ export default function App() {
   const [rebootCountdown, setRebootCountdown] = useState<number | null>(null);
   const [rebootScheduled, setRebootScheduled] = useState<string | null>(null);
   const rebootDeadline = useRef<number | null>(null);
+  // True while the last-started operation was a dry-run check (not a real run).
+  const checking = useRef(false);
 
   // app self-update
   type UpdState = "idle" | "checking" | "current" | "available" | "downloading" | "error";
@@ -153,6 +155,14 @@ export default function App() {
       api.onRunFinished((s) => {
         setSummary(s);
         setRunning(false);
+        if (checking.current) {
+          // Dry-run: ⚠ counts components with updates available, ✓ up-to-date.
+          api.notify(
+            "PatchPilot — check complete",
+            `${s.warn} component(s) have updates · ${s.ok} up to date`
+          );
+          return; // never schedule a reboot off a check
+        }
         api.notify(
           "PatchPilot — run complete",
           `✓${s.ok}  ⚠${s.warn}  ✗${s.fail}${s.rebootRequired ? "  ·  restart pending" : ""}`
@@ -192,6 +202,7 @@ export default function App() {
   }, [rebootCountdown]);
 
   const run = useCallback(async (m: RunMode) => {
+    checking.current = false;
     setMode(m);
     setMulti(true);
     setSummary(null);
@@ -203,6 +214,25 @@ export default function App() {
     setElapsed(0);
     setRunning(true);
     await api.startRun(m).catch((e) => {
+      console.error(e);
+      setRunning(false);
+    });
+  }, []);
+
+  // Dry-run: show what WOULD update in this mode without applying anything.
+  const check = useCallback(async (m: RunMode) => {
+    checking.current = true;
+    setMode(m);
+    setMulti(true);
+    setSummary(null);
+    setRebootCountdown(null);
+    rebootDeadline.current = null;
+    const plan = await api.planRun(m).catch(() => [] as ComponentStatus[]);
+    setCards(new Map(plan.map((c) => [c.id, c])));
+    setStartedAt(Date.now());
+    setElapsed(0);
+    setRunning(true);
+    await api.startCheck(m).catch((e) => {
       console.error(e);
       setRunning(false);
     });
@@ -339,6 +369,15 @@ export default function App() {
           </button>
           <button type="button" className="mode-btn" disabled={running} onClick={() => run("Firmware")}>
             <span className="mode-emoji">💾</span> Firmware
+          </button>
+          <button
+            type="button"
+            className="mode-btn"
+            disabled={running}
+            title="Dry-run: list what would update, without changing anything"
+            onClick={() => check("All")}
+          >
+            <span className="mode-emoji">🔍</span> Check
           </button>
         </div>
         <div className="deck-spacer" />

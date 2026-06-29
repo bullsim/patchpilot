@@ -15,6 +15,42 @@ pub async fn run(id: &str, ctx: &Ctx) {
     }
 }
 
+/// Dry-run: report available updates without applying.
+pub async fn check(id: &str, ctx: &Ctx) {
+    match id {
+        "macos-update" => macos_update_check(ctx).await,
+        "brew" => brew_check(ctx).await,
+        "mas" => mas_check(ctx).await,
+        _ => super::no_check(ctx),
+    }
+}
+
+async fn macos_update_check(ctx: &Ctx) {
+    ctx.rep.set(Status::Running, "Checking for macOS updates…", 40);
+    let res = run_cmd("softwareupdate", &["-l"], Duration::from_secs(300)).await;
+    let out = res.combined();
+    if out.contains("No new software available") {
+        return super::report_count(ctx, 0, "update");
+    }
+    // Each available update is a "* Label: …" / "* Title:" line.
+    let n = out.lines().filter(|l| l.trim_start().starts_with('*')).count();
+    super::report_count(ctx, n, "update");
+}
+
+async fn brew_check(ctx: &Ctx) {
+    ctx.rep.set(Status::Running, "Checking Homebrew for outdated formulae…", 40);
+    let res = run_cmd("brew", &["outdated", "--quiet"], Duration::from_secs(300)).await;
+    let n = res.stdout.lines().filter(|l| !l.trim().is_empty()).count();
+    super::report_count(ctx, n, "package");
+}
+
+async fn mas_check(ctx: &Ctx) {
+    ctx.rep.set(Status::Running, "Checking the Mac App Store…", 40);
+    let res = run_cmd("mas", &["outdated"], Duration::from_secs(300)).await;
+    let n = res.stdout.lines().filter(|l| !l.trim().is_empty()).count();
+    super::report_count(ctx, n, "app");
+}
+
 // ---- macOS Software Update (needs root → AppleScript admin prompt) ----
 async fn macos_update(ctx: &Ctx) {
     ctx.rep.set(Status::Running, "Installing macOS updates (admin prompt)…", 30);

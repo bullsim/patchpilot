@@ -30,6 +30,97 @@ pub async fn run(id: &str, ctx: &Ctx) {
     }
 }
 
+/// Dry-run: report available updates without applying. Only some components can
+/// check non-destructively; the rest fall back to "run to update".
+pub async fn check(id: &str, ctx: &Ctx) {
+    match id {
+        "winget" => winget_check(ctx).await,
+        "windows-update" => windows_update_check(ctx).await,
+        "choco" => choco_check(ctx).await,
+        _ => super::no_check(ctx),
+    }
+}
+
+/// Count the upgradable packages in `winget upgrade` output. Prefers the trailing
+/// "N upgrades available." summary; falls back to counting table rows.
+fn count_winget_upgrades(out: &str) -> usize {
+    for line in out.lines() {
+        let l = line.trim();
+        if let Some(rest) = l.strip_suffix("upgrades available.") {
+            if let Some(n) = rest.split_whitespace().last().and_then(|s| s.parse::<usize>().ok()) {
+                return n;
+            }
+        }
+    }
+    // Fallback: rows after the dashed separator, until a blank/summary line.
+    let mut counting = false;
+    let mut n = 0;
+    for line in out.lines() {
+        let t = line.trim();
+        if !counting {
+            if t.len() > 10 && t.chars().all(|c| c == '-') {
+                counting = true;
+            }
+            continue;
+        }
+        if t.is_empty() || t.contains("upgrades available") || t.contains("package(s)") {
+            break;
+        }
+        n += 1;
+    }
+    n
+}
+
+async fn winget_check(ctx: &Ctx) {
+    ctx.rep.set(Status::Running, "Checking winget for available upgrades…", 40);
+    let res = run_cmd(
+        "winget",
+        &["upgrade", "--include-unknown", "--accept-source-agreements"],
+        Duration::from_secs(180),
+    )
+    .await;
+    super::report_count(ctx, count_winget_upgrades(&res.combined()), "package");
+}
+
+const WU_CHECK_PS: &str = r#"
+try {
+  $session  = New-Object -ComObject Microsoft.Update.Session
+  $searcher = $session.CreateUpdateSearcher()
+  $result   = $searcher.Search("IsInstalled=0 and IsHidden=0")
+  Write-Output "COUNT:$($result.Updates.Count)"
+} catch { Write-Output "ERROR:$($_.Exception.Message)" }
+"#;
+
+async fn windows_update_check(ctx: &Ctx) {
+    ctx.rep.set(Status::Running, "Searching for Windows updates…", 40);
+    let res = run_cmd(
+        "powershell",
+        &["-NoProfile", "-NonInteractive", "-Command", WU_CHECK_PS],
+        Duration::from_secs(600),
+    )
+    .await;
+    let out = res.combined();
+    if let Some(line) = out.lines().map(str::trim).find(|l| l.starts_with("COUNT:")) {
+        if let Ok(n) = line.trim_start_matches("COUNT:").trim().parse::<usize>() {
+            return super::report_count(ctx, n, "update");
+        }
+    }
+    ctx.rep.set(Status::Warning, "Couldn't query Windows Update (needs admin)", 50);
+}
+
+async fn choco_check(ctx: &Ctx) {
+    ctx.rep.set(Status::Running, "Checking Chocolatey for outdated packages…", 40);
+    // `choco outdated -r` prints one `name|current|available|pinned` line per package.
+    let res = run_cmd("choco", &["outdated", "-r", "--ignore-pinned"], Duration::from_secs(180)).await;
+    let n = res
+        .stdout
+        .lines()
+        .map(str::trim)
+        .filter(|l| l.contains('|'))
+        .count();
+    super::report_count(ctx, n, "package");
+}
+
 const WINGET_FLAGS: &[&str] = &[
     "--silent",
     "--disable-interactivity",

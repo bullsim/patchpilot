@@ -13,6 +13,26 @@ pub async fn run(id: &str, ctx: &Ctx) {
     }
 }
 
+/// Dry-run: report whether toolchain updates are available.
+pub async fn check(id: &str, ctx: &Ctx) {
+    match id {
+        "rustup" => rustup_check(ctx).await,
+        _ => super::no_check(ctx),
+    }
+}
+
+async fn rustup_check(ctx: &Ctx) {
+    ctx.rep.set(Status::Running, "Checking rustup toolchains…", 40);
+    let res = run_cmd("rustup", &["check"], Duration::from_secs(180)).await;
+    // `rustup check` prints "Update available" per toolchain, or "Up to date".
+    let n = res
+        .stdout
+        .lines()
+        .filter(|l| l.contains("Update available"))
+        .count();
+    super::report_count(ctx, n, "toolchain");
+}
+
 async fn rustup(ctx: &Ctx) {
     ctx.rep.set(Status::Running, "rustup update…", 40);
     let res = run_cmd("rustup", &["update"], Duration::from_secs(1800)).await;

@@ -487,6 +487,31 @@ async fn start_run(mode: RunMode, app: AppHandle) -> Result<(), String> {
     begin_run(app, mode).await
 }
 
+/// Dry-run: report what would update in the given mode, changing nothing.
+/// Doesn't record history or report to the fleet (no state changed).
+#[tauri::command]
+async fn start_check(mode: RunMode, app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    if state.running.swap(true, Ordering::SeqCst) {
+        return Err("A run is already in progress".into());
+    }
+    state.cancel.store(false, Ordering::SeqCst);
+
+    let sys = cached_sys(&state).await;
+    let cfg = config::load();
+    let cancel = state.cancel.clone();
+    let running = state.running.clone();
+    let reporter: Arc<dyn Reporter> = Arc::new(EventReporter {
+        app: app.clone(),
+        log: FileLog::new(),
+    });
+
+    tauri::async_runtime::spawn(async move {
+        let _ = orchestrator::check_all(mode, sys, cfg, reporter, cancel).await;
+        running.store(false, Ordering::SeqCst);
+    });
+    Ok(())
+}
+
 /// Start a full run in the given mode. Usable from a command or the command poller.
 async fn begin_run(app: AppHandle, mode: RunMode) -> Result<(), String> {
     let state = app.state::<AppState>();
@@ -841,6 +866,7 @@ pub fn run() {
             save_config,
             plan_run,
             start_run,
+            start_check,
             run_one,
             cancel_run,
             open_latest_log,

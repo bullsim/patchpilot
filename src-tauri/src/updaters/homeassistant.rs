@@ -7,6 +7,42 @@ use crate::orchestrator::Ctx;
 use crate::util::run_cmd;
 use std::time::Duration;
 
+/// Dry-run: count pending HA update entities without installing them.
+pub async fn check(ctx: &Ctx) {
+    if ctx.ha_url.trim().is_empty() || ctx.ha_token.trim().is_empty() {
+        ctx.rep.set(Status::Skipped, "Not configured (set HA URL + token in Settings)", 0);
+        return;
+    }
+    let base = ctx.ha_url.trim().trim_end_matches('/').to_string();
+    let auth = format!("Authorization: Bearer {}", ctx.ha_token.trim());
+    ctx.rep.set(Status::Running, "Checking Home Assistant…", 40);
+
+    let states = run_cmd(
+        "curl",
+        &["-s", "-m", "30", "-H", &auth, &format!("{base}/api/states")],
+        Duration::from_secs(40),
+    )
+    .await;
+    if !states.stdout.contains("entity_id") {
+        ctx.rep.set(Status::Warning, "Couldn't reach HA (check URL/token in Settings)", 50);
+        return;
+    }
+    let n = serde_json::from_str::<serde_json::Value>(&states.stdout)
+        .ok()
+        .and_then(|v| v.as_array().cloned())
+        .map(|arr| {
+            arr.iter()
+                .filter(|e| {
+                    let id = e.get("entity_id").and_then(|x| x.as_str()).unwrap_or("");
+                    let st = e.get("state").and_then(|x| x.as_str()).unwrap_or("");
+                    id.starts_with("update.") && st == "on"
+                })
+                .count()
+        })
+        .unwrap_or(0);
+    super::report_count(ctx, n, "update");
+}
+
 pub async fn run(ctx: &Ctx) {
     if ctx.ha_url.trim().is_empty() || ctx.ha_token.trim().is_empty() {
         ctx.rep.set(Status::Skipped, "Not configured (set HA URL + token in Settings)", 0);
