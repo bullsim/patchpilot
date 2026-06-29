@@ -9,6 +9,8 @@ pub async fn run(id: &str, ctx: &Ctx) {
     match id {
         "rustup" => rustup(ctx).await,
         "dotnet-tools" => dotnet(ctx).await,
+        "npm-global" => npm(ctx).await,
+        "pip" => pip(ctx).await,
         other => ctx.rep.set(Status::Skipped, &format!("Unknown component '{other}'"), 0),
     }
 }
@@ -17,8 +19,74 @@ pub async fn run(id: &str, ctx: &Ctx) {
 pub async fn check(id: &str, ctx: &Ctx) {
     match id {
         "rustup" => rustup_check(ctx).await,
+        "npm-global" => npm_check(ctx).await,
+        "pip" => pip_check(ctx).await,
         _ => super::no_check(ctx),
     }
+}
+
+// ---- npm global packages ----
+async fn npm(ctx: &Ctx) {
+    ctx.rep.set(Status::Running, "Updating global npm packages…", 40);
+    let res = super::run_shell("npm update -g", 1800).await;
+    if res.code == Some(0) {
+        ctx.rep.set(Status::Success, "Global npm packages updated", 100);
+    } else {
+        ctx.rep.set(Status::Warning, &format!("npm exit: {:?}", res.code), 50);
+    }
+}
+
+async fn npm_check(ctx: &Ctx) {
+    ctx.rep.set(Status::Running, "Checking global npm packages…", 40);
+    // `npm outdated -g --parseable` prints one line per outdated package (exit 1 if any).
+    let res = super::run_shell("npm outdated -g --parseable", 180).await;
+    let n = res.stdout.lines().filter(|l| !l.trim().is_empty()).count();
+    super::report_count(ctx, n, "package");
+}
+
+// ---- pip (user/global Python packages) ----
+async fn pip(ctx: &Ctx) {
+    let Some(prefix) = super::pip_prefix().await else {
+        ctx.rep.set(Status::Skipped, "pip not found", 0);
+        return;
+    };
+    ctx.rep.set(Status::Running, "Finding outdated Python packages…", 30);
+    let names = pip_outdated_names(prefix).await;
+    if names.is_empty() {
+        ctx.rep.set(Status::Success, "Python packages up to date", 100);
+        return;
+    }
+    let total = names.len();
+    ctx.rep.set(Status::Running, &format!("Upgrading {total} package(s)…"), 60);
+    let res = super::run_shell(&format!("{prefix} install -U {}", names.join(" ")), 2400).await;
+    if res.code == Some(0) {
+        ctx.rep.set(Status::Success, &format!("Upgraded {total} Python package(s)"), 100);
+    } else {
+        ctx.rep.set(Status::Warning, &format!("pip exit: {:?}", res.code), 50);
+    }
+}
+
+async fn pip_check(ctx: &Ctx) {
+    let Some(prefix) = super::pip_prefix().await else {
+        ctx.rep.set(Status::Skipped, "pip not found", 0);
+        return;
+    };
+    ctx.rep.set(Status::Running, "Checking Python packages…", 40);
+    super::report_count(ctx, pip_outdated_names(prefix).await.len(), "package");
+}
+
+/// Names of outdated pip packages via `pip list --outdated --format=json`.
+async fn pip_outdated_names(prefix: &str) -> Vec<String> {
+    let res = super::run_shell(&format!("{prefix} list --outdated --format=json"), 180).await;
+    serde_json::from_str::<serde_json::Value>(res.stdout.trim())
+        .ok()
+        .and_then(|v| v.as_array().cloned())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|e| e.get("name").and_then(|n| n.as_str()).map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 async fn rustup_check(ctx: &Ctx) {

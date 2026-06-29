@@ -24,6 +24,8 @@ pub const COMPONENT_NAMES: &[&str] = &[
     "Home Assistant",
     "Rust (rustup)",
     ".NET",
+    "npm (global)",
+    "Python (pip)",
 ];
 
 #[cfg(target_os = "macos")]
@@ -34,6 +36,8 @@ pub const COMPONENT_NAMES: &[&str] = &[
     "Home Assistant",
     "Rust (rustup)",
     ".NET",
+    "npm (global)",
+    "Python (pip)",
 ];
 
 #[cfg(target_os = "linux")]
@@ -45,6 +49,8 @@ pub const COMPONENT_NAMES: &[&str] = &[
     "Home Assistant",
     "Rust (rustup)",
     ".NET",
+    "npm (global)",
+    "Python (pip)",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

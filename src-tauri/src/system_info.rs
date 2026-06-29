@@ -31,6 +31,8 @@ pub struct SystemInfo {
     // Cross-platform dev tools
     pub has_rustup: bool,
     pub has_dotnet: bool,
+    pub has_npm: bool,
+    pub has_pip: bool,
 }
 
 pub async fn detect() -> SystemInfo {
@@ -67,9 +69,16 @@ async fn detect_dev_tools(info: &mut SystemInfo) {
         let r = run_cmd("dotnet", &["--list-sdks"], Duration::from_secs(15)).await;
         r.code == Some(0) && !r.stdout.trim().is_empty()
     };
-    let (rustup, dotnet) = tokio::join!(tool_exists("rustup"), dotnet_sdk);
+    // pip: prefer `python -m pip`, fall back to `python3 -m pip` (covers Windows + Linux).
+    let pip = async {
+        crate::updaters::pip_prefix().await.is_some()
+    };
+    let (rustup, dotnet, npm, has_pip) =
+        tokio::join!(tool_exists("rustup"), dotnet_sdk, tool_exists("npm"), pip);
     info.has_rustup = rustup;
     info.has_dotnet = dotnet;
+    info.has_npm = npm;
+    info.has_pip = has_pip;
 }
 
 /// Last detection result, for instant first paint (refreshed in the background).

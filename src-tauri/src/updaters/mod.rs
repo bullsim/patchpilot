@@ -3,6 +3,8 @@
 
 use crate::model::Status;
 use crate::orchestrator::Ctx;
+use crate::util::{run_cmd, CmdResult};
+use std::time::Duration;
 
 mod homeassistant;
 mod devtools;
@@ -62,4 +64,28 @@ pub(crate) fn report_count(ctx: &Ctx, n: usize, noun: &str) {
 /// Dry-run fallback for components with no safe, non-destructive check.
 pub(crate) fn no_check(ctx: &Ctx) {
     ctx.rep.set(Status::Skipped, "No check available — run to update", 100);
+}
+
+/// Run a full command line through the OS shell. On Windows this resolves the
+/// `.cmd` shims (npm, pip launchers); on Unix it goes through `sh -c`.
+pub(crate) async fn run_shell(cmdline: &str, secs: u64) -> CmdResult {
+    #[cfg(windows)]
+    {
+        run_cmd("cmd", &["/C", cmdline], Duration::from_secs(secs)).await
+    }
+    #[cfg(not(windows))]
+    {
+        run_cmd("sh", &["-c", cmdline], Duration::from_secs(secs)).await
+    }
+}
+
+/// The working pip invocation prefix for this machine, or None if pip is absent.
+/// Tries `python -m pip` then `python3 -m pip` so it works without a bare `pip`.
+pub(crate) async fn pip_prefix() -> Option<&'static str> {
+    for prefix in ["python -m pip", "python3 -m pip"] {
+        if run_shell(&format!("{prefix} --version"), 15).await.code == Some(0) {
+            return Some(prefix);
+        }
+    }
+    None
 }

@@ -68,6 +68,8 @@ fn cross_platform() -> Vec<ComponentMeta> {
     vec![
         ComponentMeta { id: "rustup",       name: "Rust (rustup)", category: Software, applies: |s| s.has_rustup },
         ComponentMeta { id: "dotnet-tools", name: ".NET",          category: Software, applies: |s| s.has_dotnet },
+        ComponentMeta { id: "npm-global",   name: "npm (global)",  category: Software, applies: |s| s.has_npm },
+        ComponentMeta { id: "pip",          name: "Python (pip)",  category: Software, applies: |s| s.has_pip },
     ]
 }
 
