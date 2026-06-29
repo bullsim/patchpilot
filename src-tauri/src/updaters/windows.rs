@@ -386,12 +386,18 @@ async fn nvidia(ctx: &Ctx) {
     let app_ok = is_winget_ok(app.code);
 
     let Some(tnuc) = locate_tnuc().await else {
-        ctx.rep.set(
-            Status::Warning,
-            "App updated — install TinyNvidiaUpdateChecker to auto-install the GPU driver",
-            55,
-        );
-        let _ = app_ok;
+        // No driver tool present. The App-shell update is the whole job here, so a
+        // successful one is a success — not a warning. Only the optional GPU-driver
+        // automation is unavailable, which we surface as a hint, not an alarm.
+        if app_ok {
+            ctx.rep.set(
+                Status::Success,
+                "NVIDIA App up to date · add TinyNvidiaUpdateChecker for GPU-driver updates",
+                100,
+            );
+        } else {
+            ctx.rep.set(Status::Warning, "NVIDIA App update failed", 50);
+        }
         return;
     };
 
