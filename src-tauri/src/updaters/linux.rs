@@ -31,8 +31,15 @@ pub async fn check(id: &str, ctx: &Ctx) {
 
 async fn apt_check(ctx: &Ctx) {
     ctx.rep.set(Status::Running, "Listing upgradable apt packages…", 40);
-    let res = run_cmd("apt-get", &["-s", "upgrade"], Duration::from_secs(180)).await;
-    // `apt-get -s upgrade` prints an "Inst <pkg> ..." line per package to be upgraded.
+    // Simulate the same full-upgrade the real run does, so the count matches
+    // (plain `-s upgrade` would under-count held-back/phased packages).
+    let res = run_cmd(
+        "apt-get",
+        &["-s", "-o", "APT::Get::Always-Include-Phased-Updates=true", "full-upgrade"],
+        Duration::from_secs(180),
+    )
+    .await;
+    // `apt-get -s full-upgrade` prints an "Inst <pkg> ..." line per package to be upgraded.
     let n = res.stdout.lines().filter(|l| l.starts_with("Inst ")).count();
     super::report_count(ctx, n, "package");
 }
@@ -90,20 +97,28 @@ fn reason(res: &CmdResult) -> String {
 }
 
 // ---- APT packages (needs root via pkexec) ----
+// Uses `full-upgrade` (not plain `upgrade`) so packages held back because they
+// need new dependencies — kernels, metapackages — actually install; includes
+// phased-rollout updates; auto-answers dpkg config prompts so unattended runs
+// don't hang; then autoremoves obsolete packages (old kernels) best-effort.
+// All under a single pkexec prompt.
+const APT_FULL_UPGRADE: &str = "apt-get update && \
+DEBIAN_FRONTEND=noninteractive apt-get -y \
+-o APT::Get::Always-Include-Phased-Updates=true \
+-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
+full-upgrade && \
+(DEBIAN_FRONTEND=noninteractive apt-get -y autoremove || true)";
+
 async fn apt(ctx: &Ctx) {
-    ctx.rep.set(Status::Running, "apt update + upgrade (admin prompt)…", 30);
+    ctx.rep.set(Status::Running, "apt update + full-upgrade (admin prompt)…", 30);
     let res = run_cmd(
         "pkexec",
-        &[
-            "sh",
-            "-c",
-            "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y upgrade",
-        ],
+        &["sh", "-c", APT_FULL_UPGRADE],
         Duration::from_secs(3600),
     )
     .await;
     match res.code {
-        Some(0) => ctx.rep.set(Status::Success, "APT packages upgraded", 100),
+        Some(0) => ctx.rep.set(Status::Success, "APT fully upgraded", 100),
         Some(126) | Some(127) => {
             ctx.rep.set(Status::Skipped, "Admin prompt cancelled / not authorised", 0)
         }
