@@ -65,6 +65,15 @@ export function SettingsPanel({ config, onSave, onClose }: Props) {
           <span>Auto-restart after unattended firmware updates</span>
         </label>
 
+        <label className="toggle toggle-spaced">
+          <input
+            type="checkbox"
+            checked={draft.parallel ?? true}
+            onChange={(e) => setDraft((d) => ({ ...d, parallel: e.target.checked }))}
+          />
+          <span>Run components in parallel (faster; installers still run one at a time)</span>
+        </label>
+
         <label className="field">
           <span>Teams webhook (optional)</span>
           <input

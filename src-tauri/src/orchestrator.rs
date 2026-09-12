@@ -1,6 +1,6 @@
 use crate::config::AppConfig;
 use crate::model::{Category, ComponentStatus, RunMode, RunSummary, Status};
-use crate::registry::selection;
+use crate::registry::{selection, ComponentMeta};
 use crate::system_info::SystemInfo;
 use crate::updaters;
 use std::collections::HashMap;
@@ -100,7 +100,7 @@ pub fn plan(mode: RunMode, sys: &SystemInfo, cfg: &AppConfig) -> Vec<ComponentSt
         .collect()
 }
 
-/// Run all selected components sequentially, reporting as we go.
+/// Run all selected components (concurrent lanes), reporting as we go.
 pub async fn run_all(
     mode: RunMode,
     sys: Arc<SystemInfo>,
@@ -132,14 +132,13 @@ pub async fn run_one(
     reporter: Arc<dyn Reporter>,
     cancel: Arc<AtomicBool>,
 ) -> RunSummary {
-    let comps: Vec<crate::registry::ComponentMeta> =
-        crate::registry::find(id).into_iter().collect();
+    let comps: Vec<ComponentMeta> = crate::registry::find(id).into_iter().collect();
     run_list(RunMode::All, comps, sys, cfg, reporter, cancel, false).await
 }
 
 async fn run_list(
     mode: RunMode,
-    comps: Vec<crate::registry::ComponentMeta>,
+    comps: Vec<ComponentMeta>,
     sys: Arc<SystemInfo>,
     cfg: AppConfig,
     reporter: Arc<dyn Reporter>,
@@ -157,28 +156,69 @@ async fn run_list(
         comps.len()
     ));
 
-    for meta in &comps {
-        if cancel.load(Ordering::SeqCst) {
-            tracker.log("Run cancelled by user.");
-            break;
+    // Group into lanes. Components that share a lane contend for the same
+    // system resource (e.g. Windows Installer only allows one install at a
+    // time) so they run one after another; lanes run concurrently. With the
+    // setting off, everything goes into a single lane in registry order.
+    let lanes: Vec<Vec<ComponentMeta>> = if cfg.parallel {
+        let mut order: Vec<&'static str> = Vec::new();
+        let mut by_lane: HashMap<&'static str, Vec<ComponentMeta>> = HashMap::new();
+        for m in &comps {
+            if !by_lane.contains_key(m.lane) {
+                order.push(m.lane);
+            }
+            by_lane.entry(m.lane).or_default().push(*m);
         }
-        let rep = Reporter2 {
-            tracker: tracker.clone(),
-            id: meta.id.to_string(),
-            name: meta.name.to_string(),
-            category: meta.category,
-        };
-        rep.set(Status::Running, if check_only { "Checking…" } else { "Starting…" }, 0);
-        let ctx = Ctx {
-            rep,
-            sys: sys.clone(),
-            cancel: cancel.clone(),
-            ha_url: cfg.ha_url.clone(),
-            ha_token: cfg.ha_token.clone(),
-            winget_excludes: cfg.winget_excludes.clone(),
-            check_only,
-        };
-        updaters::run(meta.id, &ctx).await;
+        order.into_iter().filter_map(|l| by_lane.remove(l)).collect()
+    } else {
+        vec![comps.clone()]
+    };
+    if lanes.len() > 1 {
+        tracker.log(&format!(
+            "Running {} lanes concurrently: {}",
+            lanes.len(),
+            lanes
+                .iter()
+                .map(|l| format!("{} ({})", l[0].lane, l.len()))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+
+    let cfg = Arc::new(cfg);
+    let lane_futs = lanes.into_iter().map(|lane| {
+        let tracker = tracker.clone();
+        let sys = sys.clone();
+        let cancel = cancel.clone();
+        let cfg = cfg.clone();
+        async move {
+            for meta in lane {
+                if cancel.load(Ordering::SeqCst) {
+                    break;
+                }
+                let rep = Reporter2 {
+                    tracker: tracker.clone(),
+                    id: meta.id.to_string(),
+                    name: meta.name.to_string(),
+                    category: meta.category,
+                };
+                rep.set(Status::Running, if check_only { "Checking…" } else { "Starting…" }, 0);
+                let ctx = Ctx {
+                    rep,
+                    sys: sys.clone(),
+                    cancel: cancel.clone(),
+                    ha_url: cfg.ha_url.clone(),
+                    ha_token: cfg.ha_token.clone(),
+                    winget_excludes: cfg.winget_excludes.clone(),
+                    check_only,
+                };
+                updaters::run(meta.id, &ctx).await;
+            }
+        }
+    });
+    futures::future::join_all(lane_futs).await;
+    if cancel.load(Ordering::SeqCst) {
+        tracker.log("Run cancelled by user.");
     }
 
     // Tally final statuses.

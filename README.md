@@ -57,7 +57,7 @@ src-tauri/src/
   system_info.rs           hardware + OS detection (Dell/Surface/Nvidia/Intel/apps)
   config.rs                load/save config.json (per-OS component names)
   registry.rs              ComponentMeta + applies() + mode/config selection (per OS)
-  orchestrator.rs          Reporter trait, sequencing, counts, summary, reboot flag
+  orchestrator.rs          Reporter trait, concurrent lanes, counts, summary, reboot flag
   updaters/               per-OS backends: windows.rs / macos.rs / linux.rs
   reboot.rs                schedule / cancel / query reboot (schtasks)
   util.rs                  run-with-timeout, winget exit-code mapping, process kill

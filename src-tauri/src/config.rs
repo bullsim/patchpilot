@@ -71,6 +71,9 @@ pub struct AppConfig {
     /// Auto-restart after an unattended run that needs a reboot (firmware).
     #[serde(default = "default_true")]
     pub auto_reboot: bool,
+    /// Run independent components at the same time (lanes) instead of one after another.
+    #[serde(default = "default_true")]
+    pub parallel: bool,
     /// Home Assistant base URL (e.g. http://homeassistant.local:8123); empty disables it.
     #[serde(default)]
     pub ha_url: String,
@@ -130,6 +133,7 @@ impl Default for AppConfig {
             schedule_enabled: false,
             schedule_time: default_schedule_time(),
             auto_reboot: true,
+            parallel: true,
             ha_url: String::new(),
             ha_token: String::new(),
             winget_excludes: Vec::new(),

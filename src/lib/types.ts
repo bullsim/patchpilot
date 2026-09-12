@@ -64,6 +64,8 @@ export interface AppConfig {
   scheduleEnabled: boolean;
   scheduleTime: string;
   autoReboot: boolean;
+  /** Run independent components concurrently (lanes). */
+  parallel: boolean;
   haUrl: string;
   haToken: string;
   wingetExcludes: string[];
