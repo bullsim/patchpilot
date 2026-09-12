@@ -37,6 +37,7 @@ pub async fn check(id: &str, ctx: &Ctx) {
         "winget" => winget_check(ctx).await,
         "windows-update" => windows_update_check(ctx).await,
         "choco" => choco_check(ctx).await,
+        "nvidia" => nvidia_check(ctx).await,
         _ => super::no_check(ctx),
     }
 }
@@ -325,10 +326,55 @@ async fn office(ctx: &Ctx) {
 }
 
 // ---- 5. Dell Stack (Command Update CLI) ----
+/// Human-readable meaning of a Dell Command | Update CLI (dcu-cli.exe) exit code.
+fn dcu_message(code: i32) -> Option<&'static str> {
+    Some(match code {
+        0 => "Success",
+        1 => "Reboot required",
+        2 => "Dell Command Update reported an unknown error",
+        3 => "Not a Dell system",
+        4 => "Dell CLI needs administrator rights",
+        5 => "Reboot pending from a previous update",
+        6 => "Dell Command Update app is already running",
+        7 | 8 => "System not supported by Dell Command Update",
+        500 => "No updates available",
+        501 => "Dell couldn't determine applicable updates",
+        502 => "Dell update was cancelled",
+        503 => "Dell couldn't download updates",
+        _ => return None,
+    })
+}
+
+/// Parse "Number of applicable updates for the current system configuration: N".
+fn dcu_applicable_count(out: &str) -> Option<u32> {
+    out.lines()
+        .find(|l| l.contains("Number of applicable updates"))
+        .and_then(|l| l.rsplit(':').next())
+        .and_then(|n| n.trim().parse().ok())
+}
+
+fn dcu_detail(code: i32) -> String {
+    dcu_message(code)
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("Dell exit code {code}"))
+}
+
+/// Run dcu-cli. Exit code 6 means the Dell Command Update desktop app (or its
+/// own scheduled scan) holds the lock; close it and retry once.
+async fn dcu_run(dcu: &str, args: &[&str], secs: u64) -> crate::util::CmdResult {
+    let mut res = run_cmd(dcu, args, Duration::from_secs(secs)).await;
+    if res.code == Some(6) {
+        kill_processes(&["DellCommandUpdate"]).await;
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        res = run_cmd(dcu, args, Duration::from_secs(secs)).await;
+    }
+    res
+}
+
 async fn dell(ctx: &Ctx) {
     let probes = [
-        "C:\\Program Files\\Dell\\CommandUpdate\\dcu-cli.exe",
-        "C:\\Program Files (x86)\\Dell\\CommandUpdate\\dcu-cli.exe",
+        r"C:\Program Files\Dell\CommandUpdate\dcu-cli.exe",
+        r"C:\Program Files (x86)\Dell\CommandUpdate\dcu-cli.exe",
     ];
     let dcu = probes.iter().find(|p| Path::new(p).exists()).map(|s| s.to_string());
 
@@ -338,33 +384,60 @@ async fn dell(ctx: &Ctx) {
         return;
     };
 
-    ctx.rep.set(Status::Running, "Scanning BIOS/firmware…", 30);
-    let scan = run_cmd(&dcu, &["/scan"], Duration::from_secs(600)).await;
+    // The DCU desktop app blocks the CLI ("another instance is running").
+    kill_processes(&["DellCommandUpdate"]).await;
 
-    if scan.code == Some(5) {
-        ctx.rep.set(Status::Warning, "Reboot required before updates", 50);
-        ctx.rep.request_reboot();
-        return;
+    ctx.rep.set(Status::Running, "Scanning BIOS/firmware…", 30);
+    let scan = dcu_run(&dcu, &["/scan"], 600).await;
+
+    match scan.code {
+        Some(5) => {
+            ctx.rep.set(Status::Warning, "Reboot required before updates", 50);
+            ctx.rep.request_reboot();
+            return;
+        }
+        Some(500) => {
+            ctx.rep.set(Status::Success, "No updates available", 100);
+            return;
+        }
+        Some(c) if c != 0 && c != 1 => {
+            ctx.rep.set(Status::Warning, &dcu_detail(c), 50);
+            return;
+        }
+        None if scan.timed_out => {
+            ctx.rep.set(Status::Warning, "Dell scan timed out", 50);
+            return;
+        }
+        _ => {}
     }
     let out = scan.combined();
-    if out.contains("Number of applicable updates") && out.contains(": 0")
-        || out.contains("No updates available")
-    {
+    let count = dcu_applicable_count(&out);
+    if count == Some(0) || out.contains("No updates available") {
         ctx.rep.set(Status::Success, "No updates available", 100);
         return;
     }
 
-    ctx.rep.set(Status::Running, "Applying updates…", 60);
-    let apply = run_cmd(&dcu, &["/applyUpdates", "-silent"], Duration::from_secs(1800)).await;
+    let label = match count {
+        Some(n) => format!("Applying {n} update(s)…"),
+        None => "Applying updates…".to_string(),
+    };
+    ctx.rep.set(Status::Running, &label, 60);
+    let apply = dcu_run(&dcu, &["/applyUpdates", "-silent"], 1800).await;
     match apply.code {
-        Some(0) => ctx.rep.set(Status::Success, "Updates applied", 100),
-        Some(5) => {
-            ctx.rep.set(Status::Warning, "Reboot required", 50);
+        Some(0) => ctx.rep.set(
+            Status::Success,
+            &match count { Some(n) => format!("{n} update(s) applied"), None => "Updates applied".into() },
+            100,
+        ),
+        // 1 = the operation needs a reboot to finish; 5 = a reboot was already pending.
+        Some(1) | Some(5) => {
+            ctx.rep.set(Status::Warning, "Updates applied — reboot required", 50);
             ctx.rep.request_reboot();
         }
+        Some(500) => ctx.rep.set(Status::Success, "No updates available", 100),
         None if apply.timed_out => ctx.rep.set(Status::Warning, "Timed out", 50),
         None => ctx.rep.set(Status::Warning, "Dell CLI gave no result (needs admin)", 50),
-        Some(c) => ctx.rep.set(Status::Warning, &format!("Exit code {c}"), 50),
+        Some(c) => ctx.rep.set(Status::Warning, &dcu_detail(c), 50),
     }
 }
 
@@ -377,44 +450,103 @@ async fn surface(ctx: &Ctx) {
 }
 
 // ---- 7. Nvidia Stack ----
-// winget only updates the NVIDIA App shell; the actual GPU driver (shown in the
-// App's Drivers tab) has no silent CLI. TinyNvidiaUpdateChecker installs it
-// headlessly (Studio + Game Ready). We use it if it's installed.
+// winget only updates the NVIDIA App shell. The GPU driver itself comes straight
+// from NVIDIA's catalogue (nvidia_driver.rs): look up the latest WHQL package for
+// this GPU, and silently install it if it is newer than what nvidia-smi reports.
+// TinyNvidiaUpdateChecker is only used as a fallback if the lookup fails.
 async fn nvidia(ctx: &Ctx) {
-    ctx.rep.set(Status::Running, "Updating NVIDIA App…", 30);
+    use super::nvidia_driver::{self as nv, InstallOutcome};
+
+    ctx.rep.set(Status::Running, "Updating NVIDIA App…", 20);
     let app = winget_upgrade("Nvidia.NVIDIAApp", 300).await;
     let app_ok = is_winget_ok(app.code);
+    let app_txt = if app_ok { "NVIDIA App up to date" } else { "NVIDIA App update failed" };
+    let app_status = if app_ok { Status::Success } else { Status::Warning };
 
-    let Some(tnuc) = locate_tnuc().await else {
-        // No driver tool present. The App-shell update is the whole job here, so a
-        // successful one is a success — not a warning. Only the optional GPU-driver
-        // automation is unavailable, which we surface as a hint, not an alarm.
-        if app_ok {
-            ctx.rep.set(
-                Status::Success,
-                "NVIDIA App up to date · add TinyNvidiaUpdateChecker for GPU-driver updates",
-                100,
-            );
-        } else {
-            ctx.rep.set(Status::Warning, "NVIDIA App update failed", 50);
-        }
+    ctx.rep.set(Status::Running, "Checking NVIDIA for a newer GPU driver…", 40);
+    let Some((gpu, installed)) = nv::installed().await else {
+        ctx.rep.set(app_status, &format!("{app_txt} · nvidia-smi unavailable, GPU driver not checked"), 100);
         return;
     };
+    let win11 = ctx.sys.os.contains("11");
 
-    // The driver installer wants the NVIDIA App/containers stopped.
-    ctx.rep.set(Status::Running, "Installing latest GPU driver…", 70);
-    kill_processes(&["NVIDIA App", "nvcontainer", "NVDisplay.Container", "NVIDIA Web Helper"]).await;
-    sleep(Duration::from_secs(2)).await;
-
-    let drv = run_cmd(&tnuc, &["--quiet", "--no-prompt"], Duration::from_secs(2400)).await;
-    match drv.code {
-        Some(0) => ctx.rep.set(Status::Success, "NVIDIA App + GPU driver up to date", 100),
-        None if drv.timed_out => ctx.rep.set(Status::Warning, "Driver install timed out", 60),
-        c => ctx.rep.set(Status::Warning, &format!("App ok; driver checker exit {c:?}"), 60),
+    match nv::latest(&gpu, win11).await {
+        Ok(latest) if nv::is_newer(&latest.version, &installed) => {
+            if ctx.cancelled() {
+                ctx.rep.set(Status::Skipped, "Cancelled", 100);
+                return;
+            }
+            let rep = &ctx.rep;
+            let v = latest.version.clone();
+            let kind = latest.kind.clone();
+            match nv::install(&latest, |m| rep.set(Status::Running, m, 70)).await {
+                Ok(InstallOutcome::Installed) => ctx.rep.set(
+                    Status::Success,
+                    &format!("{app_txt} · GPU driver {installed} → {v} ({kind}) installed"),
+                    100,
+                ),
+                Ok(InstallOutcome::InstalledRebootRequired) => {
+                    ctx.rep.set(
+                        Status::Warning,
+                        &format!("{app_txt} · GPU driver {installed} → {v} ({kind}) installed — reboot required"),
+                        60,
+                    );
+                    ctx.rep.request_reboot();
+                }
+                Err(e) => ctx.rep.set(
+                    Status::Warning,
+                    &format!("{app_txt} · GPU driver {v} available but install failed: {e}"),
+                    60,
+                ),
+            }
+        }
+        Ok(latest) => ctx.rep.set(
+            app_status,
+            &format!("{app_txt} · GPU driver {installed} is current ({})", latest.kind),
+            100,
+        ),
+        Err(e) => {
+            // Catalogue lookup failed (offline, or an unusual GPU name). Fall back
+            // to TinyNvidiaUpdateChecker if the user has it; otherwise say so plainly.
+            let Some(tnuc) = locate_tnuc().await else {
+                ctx.rep.set(
+                    app_status,
+                    &format!("{app_txt} · GPU driver {installed} installed; NVIDIA lookup failed ({e})"),
+                    100,
+                );
+                return;
+            };
+            ctx.rep.set(Status::Running, "Installing latest GPU driver (TinyNvidiaUpdateChecker)…", 70);
+            kill_processes(&["NVIDIA App", "nvcontainer", "NVDisplay.Container", "NVIDIA Web Helper"]).await;
+            sleep(Duration::from_secs(2)).await;
+            let drv = run_cmd(&tnuc, &["--quiet", "--no-prompt"], Duration::from_secs(2400)).await;
+            match drv.code {
+                Some(0) => ctx.rep.set(Status::Success, "NVIDIA App + GPU driver up to date", 100),
+                None if drv.timed_out => ctx.rep.set(Status::Warning, "Driver install timed out", 60),
+                c => ctx.rep.set(Status::Warning, &format!("App ok; driver checker exit {c:?}"), 60),
+            }
+        }
     }
 }
 
-/// Find TinyNvidiaUpdateChecker.exe on PATH (winget adds a shim there).
+/// Dry-run: compare the installed GPU driver with NVIDIA's latest, change nothing.
+async fn nvidia_check(ctx: &Ctx) {
+    use super::nvidia_driver as nv;
+    ctx.rep.set(Status::Running, "Checking NVIDIA…", 40);
+    let Some((gpu, installed)) = nv::installed().await else {
+        return super::no_check(ctx);
+    };
+    match nv::latest(&gpu, ctx.sys.os.contains("11")).await {
+        Ok(l) if nv::is_newer(&l.version, &installed) => ctx.rep.set(
+            Status::Warning,
+            &format!("GPU driver {installed} → {} ({}) available", l.version, l.kind),
+            100,
+        ),
+        Ok(l) => ctx.rep.set(Status::Success, &format!("GPU driver {installed} is current ({})", l.kind), 100),
+        Err(e) => ctx.rep.set(Status::Skipped, &format!("Couldn't query NVIDIA ({e})"), 100),
+    }
+}
+
 async fn locate_tnuc() -> Option<String> {
     let w = run_cmd("where", &["TinyNvidiaUpdateChecker.exe"], Duration::from_secs(15)).await;
     if w.code == Some(0) {

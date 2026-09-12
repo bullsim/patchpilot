@@ -10,6 +10,8 @@ mod homeassistant;
 mod devtools;
 #[cfg(windows)]
 mod windows;
+#[cfg(windows)]
+mod nvidia_driver;
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "linux")]
@@ -24,7 +26,7 @@ pub async fn run(id: &str, ctx: &Ctx) {
     if id == "homeassistant" {
         return homeassistant::run(ctx).await;
     }
-    if matches!(id, "rustup" | "dotnet-tools") {
+    if matches!(id, "rustup" | "dotnet-tools" | "npm-global" | "pip") {
         return devtools::run(id, ctx).await;
     }
     #[cfg(windows)]
@@ -40,7 +42,7 @@ async fn check(id: &str, ctx: &Ctx) {
     if id == "homeassistant" {
         return homeassistant::check(ctx).await;
     }
-    if matches!(id, "rustup" | "dotnet-tools") {
+    if matches!(id, "rustup" | "dotnet-tools" | "npm-global" | "pip") {
         return devtools::check(id, ctx).await;
     }
     #[cfg(windows)]
