@@ -81,6 +81,9 @@ jobs:
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           includeUpdaterJson: true
+          # Matrix jobs merge latest.json concurrently; a lost race shows up as
+          # "Not Found … delete-a-release-asset". Retry the upload instead of failing.
+          retryAttempts: 3
           args: ${{ matrix.args }}
 
   publish-release:
