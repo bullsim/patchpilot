@@ -43,7 +43,18 @@ export function RebootBanner({
           <div className="reboot-sub">{sub}</div>
         </div>
       </div>
-      {!scheduledText && (
+      {scheduledText ? (
+        // A time is already booked: always offer a way out, otherwise the
+        // banner can never be dismissed.
+        <div className="reboot-actions">
+          <button type="button" className="rbtn danger" onClick={onNow}>
+            Restart Now
+          </button>
+          <button type="button" className="rbtn" onClick={onCancel}>
+            ✕ Cancel restart
+          </button>
+        </div>
+      ) : (
         <div className="reboot-actions">
           <button type="button" className="rbtn danger" onClick={onNow}>
             Restart Now

@@ -1,11 +1,43 @@
 use crate::paths::reboot_path;
 use crate::util::run_cmd;
-use chrono::{Datelike, Duration as ChronoDur, Local, NaiveTime, TimeZone, Timelike};
+use chrono::{DateTime, Datelike, Duration as ChronoDur, Local, NaiveTime, TimeZone, Timelike};
 use std::time::Duration;
 
 const TASK_NAME: &str = "PatchPilot_PendingReboot";
-const SHUTDOWN_ARGS: &str =
-    r#"shutdown.exe /r /t 60 /c "Firmware reboot scheduled by PatchPilot""#;
+
+/// A pending reboot whose scheduled time is further in the past than this is
+/// considered stale (it fired, was missed, or was never going to fire) and is
+/// cleared instead of being shown forever.
+const STALE_AFTER_HOURS: i64 = 2;
+
+/// Registers the one-shot reboot task via the Task Scheduler cmdlets.
+///
+/// Why not `schtasks /SD`: it parses the date in the machine's *locale* short
+/// date format, so "08/12/2026" meant 12 Aug on a US machine but 8 Dec on a UK
+/// one — the reboot silently never happened. Here the time is passed as an ISO
+/// string and parsed with the invariant culture, so it is unambiguous.
+///
+/// `__AT__` is replaced with `yyyy-MM-ddTHH:mm:ss` (local time).
+#[cfg(windows)]
+const REGISTER_PS: &str = r#"
+$ErrorActionPreference = 'Stop'
+$t  = [datetime]::ParseExact('__AT__', 'yyyy-MM-ddTHH:mm:ss', [Globalization.CultureInfo]::InvariantCulture)
+$a  = New-ScheduledTaskAction -Execute 'shutdown.exe' -Argument '/r /t 60 /c "Firmware reboot scheduled by PatchPilot"'
+$tr = New-ScheduledTaskTrigger -Once -At $t
+# Expire 2h after the target and self-delete, so a missed/fired task never lingers.
+$tr.EndBoundary = $t.AddHours(2).ToString('s')
+$s  = New-ScheduledTaskSettingsSet -WakeToRun -StartWhenAvailable -DeleteExpiredTaskAfter (New-TimeSpan -Minutes 5)
+try {
+    # Preferred: run as SYSTEM so it fires even if nobody is logged on (needs admin).
+    $p = New-ScheduledTaskPrincipal -UserId 'NT AUTHORITY\SYSTEM' -RunLevel Highest
+    Register-ScheduledTask -TaskName '__TASK__' -Action $a -Trigger $tr -Settings $s -Principal $p -Force | Out-Null
+} catch {
+    # Fallback (not elevated): run as the current user while logged on.
+    $p = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive
+    Register-ScheduledTask -TaskName '__TASK__' -Action $a -Trigger $tr -Settings $s -Principal $p -Force | Out-Null
+}
+Write-Output 'REGISTERED'
+"#;
 
 /// Schedule (or perform) a reboot. `when` is "now" or "HH:mm".
 /// Returns the ISO 8601 datetime it is scheduled for ("now" -> immediate).
@@ -35,20 +67,18 @@ pub async fn schedule(when: &str) -> Result<String, String> {
         target += ChronoDur::days(1);
     }
 
-    if cfg!(windows) {
-        let st = target.format("%H:%M").to_string();
-        let sd = target.format("%m/%d/%Y").to_string();
+    #[cfg(windows)]
+    {
+        let at = target.format("%Y-%m-%dT%H:%M:%S").to_string();
+        let script = REGISTER_PS.replace("__AT__", &at).replace("__TASK__", TASK_NAME);
         let res = run_cmd(
-            "schtasks",
-            &[
-                "/Create", "/TN", TASK_NAME, "/TR", SHUTDOWN_ARGS, "/SC", "ONCE", "/ST", &st,
-                "/SD", &sd, "/RL", "HIGHEST", "/F",
-            ],
-            Duration::from_secs(20),
+            "powershell",
+            &["-NoProfile", "-NonInteractive", "-Command", &script],
+            Duration::from_secs(30),
         )
         .await;
-        if !crate::util::is_winget_ok(res.code) && res.code != Some(0) {
-            return Err(format!("schtasks failed: {}", res.combined()));
+        if !res.stdout.contains("REGISTERED") {
+            return Err(format!("could not register reboot task: {}", res.combined().trim()));
         }
     }
 
@@ -69,13 +99,30 @@ pub async fn cancel() {
     let _ = std::fs::remove_file(reboot_path());
 }
 
-/// Returns the ISO datetime of a pending reboot, if the task still exists.
+/// Returns the ISO datetime of a pending reboot, if it is still in the future
+/// (or only just passed) and, on Windows, the task still exists.
 pub async fn pending() -> Option<String> {
     let iso = std::fs::read_to_string(reboot_path()).ok()?;
     let iso = iso.trim().to_string();
     if iso.is_empty() {
         return None;
     }
+
+    // Stale or unreadable timestamp -> clear it rather than show it forever.
+    match DateTime::parse_from_rfc3339(&iso) {
+        Ok(t) => {
+            let age = Local::now().signed_duration_since(t.with_timezone(&Local));
+            if age > ChronoDur::hours(STALE_AFTER_HOURS) {
+                cancel().await;
+                return None;
+            }
+        }
+        Err(_) => {
+            cancel().await;
+            return None;
+        }
+    }
+
     if cfg!(windows) {
         let res = run_cmd(
             "schtasks",
