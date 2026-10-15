@@ -72,12 +72,33 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
             librsvg2-dev patchelf build-essential curl wget file libxdo-dev libssl-dev
       - run: npm ci
+      # Windows Authenticode via Azure Trusted Signing (docs/SIGNING.md). Fetches
+      # the signing dlib only when the secrets exist; otherwise sign-windows.ps1
+      # no-ops and the build is unsigned.
+      - name: Prepare Azure Trusted Signing
+        if: startsWith(matrix.platform, 'windows') && env.AZURE_CLIENT_SECRET != ''
+        env:
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        shell: pwsh
+        run: |
+          nuget install Microsoft.Trusted.Signing.Client -OutputDirectory "$env:RUNNER_TEMP/tsc" -ExcludeVersion -NonInteractive
+          $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
+          $dlib = "$env:RUNNER_TEMP/tsc/Microsoft.Trusted.Signing.Client/bin/$arch/Azure.CodeSigning.Dlib.dll"
+          if (-not (Test-Path $dlib)) { throw "dlib not found at $dlib" }
+          "TRUSTED_SIGNING_DLIB=$dlib" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Build, sign & upload to the release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Azure Trusted Signing (Windows). Empty when the secrets aren't set.
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          TRUSTED_SIGNING_ENDPOINT: ${{ secrets.TRUSTED_SIGNING_ENDPOINT }}
+          TRUSTED_SIGNING_ACCOUNT: ${{ secrets.TRUSTED_SIGNING_ACCOUNT }}
+          TRUSTED_SIGNING_PROFILE: ${{ secrets.TRUSTED_SIGNING_PROFILE }}
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           includeUpdaterJson: true

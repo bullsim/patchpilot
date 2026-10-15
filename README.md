@@ -35,6 +35,11 @@ Grab the latest build for each machine from the **Releases** page:
 Install once per machine — after that the app **auto-updates itself** from new releases.
 No build tools needed on the target machines; only this dev machine builds.
 
+> **Unsigned builds:** until a code-signing certificate is configured, Windows shows
+> "Unknown publisher" / SmartScreen on first install (click *More info → Run anyway*) and
+> macOS needs right-click → *Open*. The release pipeline is ready to sign automatically —
+> see [docs/SIGNING.md](docs/SIGNING.md) for the one-off setup (Azure Trusted Signing).
+
 ## Stack
 
 - **Tauri v2** shell · **React + TypeScript** UI (Vite) · **Rust** backend.
